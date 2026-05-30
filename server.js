@@ -2870,13 +2870,6 @@ if (fs.existsSync(frontendIndexPath)) {
   });
 }
 
-app.get('/api/fix-legacy', (req, res) => {
-  db.run("UPDATE orders SET is_legacy = 1", [], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({success: true, updated: this.changes});
-  });
-});
-
 app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 });
