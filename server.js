@@ -2861,6 +2861,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
     db.get(`
       SELECT 
         (SELECT SUM(stock * purchasePrice) FROM categories WHERE stock > 0) as warehouseStockValue,
+        (SELECT SUM(stock) FROM categories WHERE stock > 0) as warehouseStockCount,
         (SELECT SUM(oi.quantity * c.purchasePrice)
          FROM orders o
          JOIN order_items oi ON o.id = oi.orderId
@@ -2907,6 +2908,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         ) as preHubCount
     `, [], (err, row) => {
       stats.totals.warehouseStockValue = (row && row.warehouseStockValue) || 0;
+      stats.totals.warehouseStockCount = (row && row.warehouseStockCount) || 0;
       stats.totals.preHubCost = (row && row.preHubCost) || 0;
       stats.totals.preHubCount = (row && row.preHubCount) || 0;
       resolve();
