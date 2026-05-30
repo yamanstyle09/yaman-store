@@ -1666,6 +1666,69 @@ app.delete('/api/inventory-purchases/:id', authenticateToken, requireAdmin, (req
 });
 
 
+app.post('/api/inventory-purchases/distribute', authenticateToken, requireAdmin, (req, res) => {
+  const { category_code, distribution } = req.body;
+  if (!category_code || !distribution || !Array.isArray(distribution)) {
+    return res.status(400).json({ error: "بيانات التوزيع غير صالحة" });
+  }
+
+  const requestedTotal = distribution.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0);
+  if (requestedTotal <= 0) return res.status(400).json({ error: "يجب أن تكون الكمية الموزعة أكبر من 0" });
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    // 1. Calculate unassigned stock for this category
+    db.get(`
+      SELECT 
+        c.stock as total_stock, 
+        COALESCE((SELECT SUM(stock) FROM products WHERE category = c.code), 0) as distributed_stock 
+      FROM categories c WHERE c.code = ?
+    `, [category_code], (err, row) => {
+      if (err) {
+        db.run("ROLLBACK");
+        return res.status(500).json({ error: err.message });
+      }
+      if (!row) {
+        db.run("ROLLBACK");
+        return res.status(404).json({ error: "الفئة غير موجودة" });
+      }
+
+      const unassignedStock = row.total_stock - row.distributed_stock;
+      if (requestedTotal > unassignedStock) {
+        db.run("ROLLBACK");
+        return res.status(400).json({ error: `خطأ صارم: الكمية المطلوبة للتوزيع (${requestedTotal}) تتجاوز الرصيد غير الموزع المتاح (${unassignedStock})!` });
+      }
+
+      // 2. Perform distribution
+      let distErr = null;
+      const stmt = db.prepare("UPDATE products SET stock = stock + ? WHERE id = ? AND category = ?");
+      distribution.forEach(dist => {
+        const qty = parseInt(dist.quantity) || 0;
+        if (dist.productId && qty > 0) {
+          stmt.run([qty, parseInt(dist.productId), category_code], (e) => {
+            if (e) distErr = e;
+          });
+        }
+      });
+      
+      stmt.finalize(() => {
+        if (distErr) {
+          db.run("ROLLBACK");
+          return res.status(500).json({ error: distErr.message });
+        }
+        db.run("COMMIT", (commitErr) => {
+          if (commitErr) {
+            db.run("ROLLBACK");
+            return res.status(500).json({ error: commitErr.message });
+          }
+          res.json({ success: true, message: "تم التوزيع بنجاح" });
+        });
+      });
+    });
+  });
+});
+
+
 // 3. DEBT PAYMENTS API
 app.get('/api/debt-payments', authenticateToken, requireAdmin, (req, res) => {
   db.all("SELECT * FROM debt_payments ORDER BY payment_date DESC", [], (err, rows) => {
