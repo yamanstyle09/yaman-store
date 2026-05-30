@@ -3114,7 +3114,55 @@ app.patch('/api/products/:id/stock', authenticateToken, requireAdmin, (req, res)
     res.json({ success: true });
   });
 });
+// Endpoint to clean up unused images in uploads directory
+app.post('/api/system/cleanup-images', authenticateToken, requireAdmin, (req, res) => {
+  db.all("SELECT image FROM products WHERE image IS NOT NULL", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    const usedImages = new Set();
+    rows.forEach(row => {
+      if (row.image && row.image.startsWith('/uploads/')) {
+        usedImages.add(row.image.replace('/uploads/', ''));
+      }
+    });
 
+    if (!fs.existsSync(uploadsDir)) {
+      return res.json({ success: true, deletedCount: 0, message: "No uploads directory found." });
+    }
+
+    fs.readdir(uploadsDir, (err, files) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      let deletedCount = 0;
+      let freedBytes = 0;
+
+      files.forEach(file => {
+        // Skip .gitkeep or other hidden files
+        if (file.startsWith('.')) return;
+
+        if (!usedImages.has(file)) {
+          const filePath = path.join(uploadsDir, file);
+          try {
+            const stats = fs.statSync(filePath);
+            freedBytes += stats.size;
+            fs.unlinkSync(filePath);
+            deletedCount++;
+          } catch (e) {
+            console.error("Error deleting file:", filePath, e);
+          }
+        }
+      });
+
+      const freedMB = (freedBytes / (1024 * 1024)).toFixed(2);
+      res.json({ 
+        success: true, 
+        deletedCount, 
+        freedMB,
+        message: `تم تنظيف ${deletedCount} صورة غير مستخدمة وتوفير ${freedMB} ميجابايت من المساحة.` 
+      });
+    });
+  });
+});
 app.post('/api/temp-sql', authenticateToken, requireAdmin, (req, res) => {
   db.run(req.body.sql, [], function(err) {
     if (err) return res.status(500).json({ error: err.message });
