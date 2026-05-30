@@ -1276,7 +1276,7 @@ function getDhdArabicStatusLabel(dhdStatus, reason, content) {
   // Normalize status string (strip French accents and convert underscores to spaces)
   const norm = status.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/_/g, " ").trim();
   
-  // Exclude Validation/Valid/Preparation/Test stages
+  // Map Validation/Preparation stages to real Pre-Hub statuses instead of test
   if (
     norm.includes('validation') || 
     norm.includes('valid') || 
@@ -1284,7 +1284,7 @@ function getDhdArabicStatusLabel(dhdStatus, reason, content) {
     norm.includes('preparation') || 
     (norm.includes('hub') && !norm.includes('vers hub') && !norm.includes('en hub'))
   ) {
-    return "شحنة تجريبية (قيد التحقق/الجمع) 🧪";
+    return "بانتظار التأكيد / التجهيز ⏳";
   }
   
   // Delivered states
