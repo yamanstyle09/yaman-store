@@ -595,7 +595,7 @@ function deleteDhdShipment(trackingNumber) {
 
 // System Users Management
 app.get('/api/system_users', authenticateToken, requireAdmin, (req, res) => {
-  db.all('SELECT email, name, role, worker_code FROM system_users', [], (err, rows) => {
+  db.all('SELECT email, name, role, worker_code, phone FROM system_users', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -608,7 +608,7 @@ const hashPassword = (password) => {
 };
 
 app.post('/api/system_users', authenticateToken, requireAdmin, (req, res) => {
-  const { email, password, name, role, worker_code } = req.body;
+  const { email, password, name, role, worker_code, phone } = req.body;
   if (!email || !name || !role) return res.status(400).json({ error: 'البيانات الأساسية مطلوبة' });
   
   db.get('SELECT * FROM system_users WHERE email = ?', [email.trim().toLowerCase()], (err, existing) => {
@@ -622,11 +622,36 @@ app.post('/api/system_users', authenticateToken, requireAdmin, (req, res) => {
     }
 
     db.run(
-      'INSERT OR REPLACE INTO system_users (email, password_hash, name, role, worker_code) VALUES (?, ?, ?, ?, ?)',
-      [email.trim().toLowerCase(), passHash, name, role, worker_code || ''],
+      'INSERT OR REPLACE INTO system_users (email, password_hash, name, role, worker_code, phone) VALUES (?, ?, ?, ?, ?, ?)',
+      [email.trim().toLowerCase(), passHash, name, role, worker_code || '', phone || ''],
       function(err2) {
         if (err2) return res.status(500).json({ error: err2.message });
         res.json({ success: true, message: 'تم حفظ بيانات الموظف بنجاح' });
+      }
+    );
+  });
+});
+
+app.put('/api/system_users/:oldEmail', authenticateToken, requireAdmin, (req, res) => {
+  const oldEmail = req.params.oldEmail;
+  const { email, password, name, role, worker_code, phone } = req.body;
+  if (!email || !name || !role) return res.status(400).json({ error: 'البيانات الأساسية مطلوبة' });
+
+  db.get('SELECT * FROM system_users WHERE email = ?', [oldEmail], (err, existing) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!existing) return res.status(404).json({ error: 'المستخدم غير موجود' });
+
+    let passHash = existing.password_hash;
+    if (password) {
+      passHash = hashPassword(password);
+    }
+
+    db.run(
+      'UPDATE system_users SET email = ?, password_hash = ?, name = ?, role = ?, worker_code = ?, phone = ? WHERE email = ?',
+      [email.trim().toLowerCase(), passHash, name, role, worker_code || '', phone || '', oldEmail],
+      function(err2) {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح' });
       }
     );
   });

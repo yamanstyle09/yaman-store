@@ -356,6 +356,7 @@ const initDb = () => {
       role TEXT NOT NULL
     )`, () => {
       db.run("ALTER TABLE system_users ADD COLUMN worker_code TEXT DEFAULT ''", [], (e) => {});
+      db.run("ALTER TABLE system_users ADD COLUMN phone TEXT DEFAULT ''", [], (e) => {});
       db.get("SELECT COUNT(*) as count FROM system_users", [], (err, row) => {
         if (err || !row || row.count === 0) {
           console.log("Seeding default system users securely...");
