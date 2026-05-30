@@ -2851,31 +2851,37 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN order_items oi ON o.id = oi.orderId
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
-         WHERE o.status IN ('confirmed', 'cancelled') 
-           AND o.createdAt >= '2026-05-30'
-           AND o.ecotrack_tracking IS NOT NULL
+         WHERE o.createdAt >= '2026-05-30'
+           AND o.status != 'cancelled'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
-             o.dhd_status_label LIKE '%Prêt à expédier%' OR
-             o.dhd_status_label LIKE '%Ramassage%' OR
-             o.dhd_status_label LIKE '%Vers Station%' OR
-             o.dhd_status_label LIKE '%Vers Hub%' OR
-             o.dhd_status_label LIKE '%تم تسجيل الطلب%'
+             o.status = 'new' OR
+             (o.status = 'confirmed' AND (
+               o.dhd_status_label LIKE '%Prêt à expédier%' OR
+               o.dhd_status_label LIKE '%Ramassage%' OR
+               o.dhd_status_label LIKE '%Vers Station%' OR
+               o.dhd_status_label LIKE '%Vers Hub%' OR
+               o.dhd_status_label LIKE '%تم تسجيل الطلب%' OR
+               o.ecotrack_tracking IS NULL
+             ))
            )
         ) as preHubCost,
         (SELECT SUM(oi.quantity)
          FROM orders o
          JOIN order_items oi ON o.id = oi.orderId
-         WHERE o.status IN ('confirmed', 'cancelled') 
-           AND o.createdAt >= '2026-05-30'
-           AND o.ecotrack_tracking IS NOT NULL
+         WHERE o.createdAt >= '2026-05-30'
+           AND o.status != 'cancelled'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
-             o.dhd_status_label LIKE '%Prêt à expédier%' OR
-             o.dhd_status_label LIKE '%Ramassage%' OR
-             o.dhd_status_label LIKE '%Vers Station%' OR
-             o.dhd_status_label LIKE '%Vers Hub%' OR
-             o.dhd_status_label LIKE '%تم تسجيل الطلب%'
+             o.status = 'new' OR
+             (o.status = 'confirmed' AND (
+               o.dhd_status_label LIKE '%Prêt à expédier%' OR
+               o.dhd_status_label LIKE '%Ramassage%' OR
+               o.dhd_status_label LIKE '%Vers Station%' OR
+               o.dhd_status_label LIKE '%Vers Hub%' OR
+               o.dhd_status_label LIKE '%تم تسجيل الطلب%' OR
+               o.ecotrack_tracking IS NULL
+             ))
            )
         ) as preHubCount
     `, [], (err, row) => {
