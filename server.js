@@ -2833,21 +2833,21 @@ app.get('/api/analytics/worker-performance', authenticateToken, (req, res) => {
   let workerFilter = '';
   let params = [];
   if (workerCode) {
-    workerFilter = ' AND creator_code = ?';
+    workerFilter = ' AND worker_code = ?';
     params.push(workerCode);
   }
 
   db.all(`
     SELECT 
-      creator_code as workerCode,
+      worker_code as workerCode,
       COUNT(*) as totalInput,
       SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) as validated,
       SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
       SUM(CASE WHEN status = 'cancelled' OR dhd_status_label LIKE '%Retour%' THEN 1 ELSE 0 END) as returned,
       SUM(CASE WHEN status NOT IN ('delivered', 'cancelled') AND (dhd_status_label IS NULL OR dhd_status_label NOT LIKE '%Retour%') THEN 1 ELSE 0 END) as inTransit
     FROM orders
-    WHERE creator_code IS NOT NULL AND creator_code != '' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) ${dateFilter} ${workerFilter}
-    GROUP BY creator_code
+    WHERE worker_code IS NOT NULL AND worker_code != '' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) ${dateFilter} ${workerFilter}
+    GROUP BY worker_code
   `, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
