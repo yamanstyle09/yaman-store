@@ -3,7 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const dbPath = path.resolve(__dirname, 'store.db');
+const isProd = process.env.NODE_ENV === 'production';
+const dataDir = isProd ? path.join(__dirname, 'data') : __dirname;
+if (isProd && !fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+const dbPath = path.resolve(dataDir, 'store.db');
 const db = new sqlite3.Database(dbPath);
 
 // Enable WAL journal mode immediately
