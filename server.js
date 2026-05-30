@@ -782,12 +782,12 @@ app.post('/api/communes/bulk-insert', authenticateToken, requireAdmin, (req, res
   db.serialize(() => {
     db.run("BEGIN TRANSACTION");
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO communes (id, wilayaId, communeName, appliedHomeFee, appliedDeskFee, realHomeFee, realDeskFee, hasStopDesk)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO communes (id, wilayaId, wilayaName, communeName, appliedHomeFee, appliedDeskFee, realHomeFee, realDeskFee, hasStopDesk)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     communes.forEach(c => {
-      stmt.run([c.id, c.wilayaId, c.communeName, c.appliedHomeFee, c.appliedDeskFee, c.realHomeFee, c.realDeskFee, c.hasStopDesk]);
+      stmt.run([c.id, c.wilayaId, c.wilayaName, c.communeName, c.appliedHomeFee, c.appliedDeskFee, c.realHomeFee, c.realDeskFee, c.hasStopDesk]);
     });
     
     stmt.finalize();
