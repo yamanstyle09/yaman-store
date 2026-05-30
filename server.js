@@ -1152,7 +1152,7 @@ function updateOrderStatus(orderId, newStatus, callback) {
     if (!order) return callback(new Error("Order not found"));
     
     const oldStatus = order.status;
-    const isDecrementState = (s) => s === 'confirmed' || s === 'delivered';
+    const isDecrementState = (s) => s !== 'cancelled';
     const wasDecremented = isDecrementState(oldStatus);
     const shouldBeDecremented = isDecrementState(newStatus);
     
