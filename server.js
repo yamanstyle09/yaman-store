@@ -601,6 +601,12 @@ app.get('/api/system_users', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
+const hashPassword = (password) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHmac('sha256', salt).update(password).digest('hex');
+  return `${salt}:${hash}`;
+};
+
 app.post('/api/system_users', authenticateToken, requireAdmin, (req, res) => {
   const { email, password, name, role, worker_code } = req.body;
   if (!email || !name || !role) return res.status(400).json({ error: 'البيانات الأساسية مطلوبة' });
