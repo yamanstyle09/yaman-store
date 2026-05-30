@@ -2851,7 +2851,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN order_items oi ON o.id = oi.orderId
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
-         WHERE o.is_legacy = 0
+         WHERE IFNULL(o.is_legacy, 0) = 0
            AND o.status != 'cancelled'
            AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
@@ -2872,7 +2872,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         (SELECT SUM(oi.quantity)
          FROM orders o
          JOIN order_items oi ON o.id = oi.orderId
-         WHERE o.is_legacy = 0
+         WHERE IFNULL(o.is_legacy, 0) = 0
            AND o.status != 'cancelled'
            AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
