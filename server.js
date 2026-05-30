@@ -933,11 +933,14 @@ app.post('/api/orders', (req, res) => {
               
               const orderId = this.lastID;
               const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
+              const stmt2 = db.prepare("UPDATE categories SET stock = stock - ? WHERE code = (SELECT category FROM products WHERE id = ?)");
               
               items.forEach(item => {
                 stmt.run([orderId, item.productId, item.quantity, item.price]);
+                stmt2.run([item.quantity, item.productId]);
               });
               stmt.finalize();
+              stmt2.finalize();
               
               db.run("COMMIT", (commitErr) => {
                 if (commitErr) return res.status(500).json({ error: commitErr.message });
