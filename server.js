@@ -2862,10 +2862,8 @@ app.patch('/api/products/:id/stock', authenticateToken, requireAdmin, (req, res)
 // Catch-all: serve index.html for React Router (must be LAST)
 const frontendIndexPath = path.join(__dirname, 'public', 'index.html');
 if (fs.existsSync(frontendIndexPath)) {
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(frontendIndexPath);
-    }
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(frontendIndexPath);
   });
 }
 
