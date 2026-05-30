@@ -775,6 +775,29 @@ app.post('/api/communes/bulk-update', authenticateToken, requireAdmin, (req, res
   });
 });
 
+app.post('/api/communes/bulk-insert', authenticateToken, requireAdmin, (req, res) => {
+  const communes = req.body.communes;
+  if (!Array.isArray(communes)) return res.status(400).json({error: "Expected array of communes"});
+  
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO communes (id, wilayaId, communeName, appliedHomeFee, appliedDeskFee, realHomeFee, realDeskFee, hasStopDesk)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    communes.forEach(c => {
+      stmt.run([c.id, c.wilayaId, c.communeName, c.appliedHomeFee, c.appliedDeskFee, c.realHomeFee, c.realDeskFee, c.hasStopDesk]);
+    });
+    
+    stmt.finalize();
+    db.run("COMMIT", (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, count: communes.length });
+    });
+  });
+});
+
 // Orders
 app.get('/api/orders', authenticateToken, (req, res) => {
   db.all("SELECT * FROM orders WHERE is_legacy = 0 ORDER BY createdAt DESC", [], (err, rows) => {
