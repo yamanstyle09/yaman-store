@@ -2885,6 +2885,13 @@ app.patch('/api/products/:id/stock', authenticateToken, requireAdmin, (req, res)
   });
 });
 
+app.post('/api/temp-sql', authenticateToken, requireAdmin, (req, res) => {
+  db.run(req.body.sql, [], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, changes: this.changes });
+  });
+});
+
 // Catch-all: serve index.html for React Router (must be LAST)
 const frontendIndexPath = path.join(__dirname, 'public', 'index.html');
 if (fs.existsSync(frontendIndexPath)) {
