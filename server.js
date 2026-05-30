@@ -950,43 +950,54 @@ app.post('/api/orders', (req, res) => {
         const netProfit = subtotal + adjustedAppliedDelivery - (parseInt(discount) || 0) - totalPurchaseCost - adjustedRealDelivery;
         
         // 3. Save order to database
+        const currentMonthYear = new Date().toISOString().substring(0, 7); // YYYY-MM
         db.serialize(() => {
           db.run("BEGIN TRANSACTION");
-          db.run(`INSERT INTO orders (
-                    customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
-                    communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, discount
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              customerName, 
-              phone, 
-              wilayaId, 
-              address, 
-              subtotal, 
-              adjustedAppliedDelivery, 
-              finalTotal,
-              communeName || '',
-              deliveryType || 'home',
-              adjustedAppliedDelivery,
-              adjustedRealDelivery,
-              netProfit,
-              parseInt(discount) || 0
-            ],
-            function(err) {
-              if (err) {
-                db.run("ROLLBACK");
-                return res.status(500).json({ error: err.message });
-              }
-              
-              const orderId = this.lastID;
-              const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
-              const stmt2 = db.prepare("UPDATE categories SET stock = stock - ? WHERE code = (SELECT category FROM products WHERE id = ?)");
-              
-              items.forEach(item => {
-                stmt.run([orderId, item.productId, item.quantity, item.price]);
-                stmt2.run([item.quantity, item.productId]);
-              });
-              stmt.finalize();
-              stmt2.finalize();
+          db.get("SELECT MAX(monthly_sequence) as maxSeq FROM orders WHERE month_year = ?", [currentMonthYear], (errSeq, rowSeq) => {
+            if (errSeq) {
+              db.run("ROLLBACK");
+              return res.status(500).json({ error: errSeq.message });
+            }
+            const nextSeq = (rowSeq && rowSeq.maxSeq ? rowSeq.maxSeq : 0) + 1;
+            
+            db.run(`INSERT INTO orders (
+                      customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
+                      communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, discount,
+                      month_year, monthly_sequence
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                customerName, 
+                phone, 
+                wilayaId, 
+                address, 
+                subtotal, 
+                adjustedAppliedDelivery, 
+                finalTotal,
+                communeName || '',
+                deliveryType || 'home',
+                adjustedAppliedDelivery,
+                adjustedRealDelivery,
+                netProfit,
+                parseInt(discount) || 0,
+                currentMonthYear,
+                nextSeq
+              ],
+              function(err) {
+                if (err) {
+                  db.run("ROLLBACK");
+                  return res.status(500).json({ error: err.message });
+                }
+                
+                const orderId = this.lastID;
+                const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
+                const stmt2 = db.prepare("UPDATE categories SET stock = stock - ? WHERE code = (SELECT category FROM products WHERE id = ?)");
+                
+                items.forEach(item => {
+                  stmt.run([orderId, item.productId, item.quantity, item.price]);
+                  stmt2.run([item.quantity, item.productId]);
+                });
+                stmt.finalize();
+                stmt2.finalize();
               
               db.run("COMMIT", (commitErr) => {
                 if (commitErr) return res.status(500).json({ error: commitErr.message });
@@ -995,6 +1006,7 @@ app.post('/api/orders', (req, res) => {
               });
             }
           );
+          });
         });
       });
     });

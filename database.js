@@ -228,9 +228,31 @@ const initDb = () => {
       deliveryPrice INTEGER NOT NULL,
       total INTEGER NOT NULL,
       status TEXT DEFAULT 'new',
+      month_year TEXT,
+      monthly_sequence INTEGER DEFAULT 0,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, () => {
       // Safe migrations for orders table
+      db.all("PRAGMA table_info(orders)", (err, columns) => {
+        if (err) return;
+        const colNames = columns.map(c => c.name);
+        
+        if (!colNames.includes('month_year')) {
+          db.run("ALTER TABLE orders ADD COLUMN month_year TEXT", () => {
+            const currentMonthYear = new Date().toISOString().substring(0, 7); // YYYY-MM
+            db.run(`UPDATE orders SET month_year = ?`, [currentMonthYear]);
+          });
+          console.log("Migration: Added month_year to orders");
+        }
+        
+        if (!colNames.includes('monthly_sequence')) {
+          db.run("ALTER TABLE orders ADD COLUMN monthly_sequence INTEGER DEFAULT 0", () => {
+            // Give all legacy orders a fake sequence based on ID
+            db.run(`UPDATE orders SET monthly_sequence = id`);
+          });
+          console.log("Migration: Added monthly_sequence to orders");
+        }
+      });
       db.run("ALTER TABLE orders ADD COLUMN communeName TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN deliveryType TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN appliedDeliveryPrice INTEGER DEFAULT 0", [], (e) => {});
