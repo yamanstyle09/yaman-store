@@ -1,0 +1,9 @@
+node_modules/
+*.db-shm
+*.db-wal
+store_backup_*.db
+.env
+uploads/*
+!uploads/.gitkeep
+public/
+*.log
