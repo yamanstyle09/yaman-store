@@ -932,14 +932,43 @@ app.post('/api/orders', (req, res) => {
         
         let totalPurchaseCost = 0;
         let totalWeightRaw = 0;
+        let outOfStockError = null;
+        
+        // Accumulate requested quantities by category code to check against available stock
+        const requestedQuantities = {};
         
         items.forEach(item => {
           const catCode = productCategoryMap[item.productId];
+          // Only check stock if category exists, otherwise assume 0
+          if (catCode) {
+            requestedQuantities[catCode] = (requestedQuantities[catCode] || 0) + item.quantity;
+          } else {
+            requestedQuantities['UNKNOWN'] = (requestedQuantities['UNKNOWN'] || 0) + item.quantity;
+          }
+          
           const purchasePrice = purchasePriceMap[catCode] || 0;
           const unitWeight = weightMap[catCode] || 1.45;
           totalPurchaseCost += purchasePrice * item.quantity;
           totalWeightRaw += unitWeight * item.quantity;
         });
+        
+        // Verify stock availability safely
+        for (const catCode of Object.keys(requestedQuantities)) {
+          const requested = requestedQuantities[catCode];
+          if (catCode === 'UNKNOWN') {
+            outOfStockError = `عذراً، بعض المنتجات المطلوبة غير موجودة في المستودع.`;
+            break;
+          }
+          const available = stockMap[catCode] || 0;
+          if (requested > available) {
+            outOfStockError = `عذراً، الكمية المطلوبة (${requested}) للمنتج غير متوفرة في المخزن. المتوفر حالياً هو: ${available} قطعة.`;
+            break;
+          }
+        }
+        
+        if (outOfStockError) {
+          return res.status(400).json({ error: outOfStockError });
+        }
         
         // Match Ecotrack weight rounding logic
         const finalWeight = totalWeightRaw > 5.9
@@ -1001,7 +1030,7 @@ app.post('/api/orders', (req, res) => {
                 
                 const orderId = this.lastID;
                 const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
-                const stmt2 = db.prepare("UPDATE categories SET stock = stock - ? WHERE code = (SELECT category FROM products WHERE id = ?)");
+                const stmt2 = db.prepare("UPDATE categories SET stock = MAX(0, stock - ?) WHERE code = (SELECT category FROM products WHERE id = ?)");
                 
                 items.forEach(item => {
                   stmt.run([orderId, item.productId, item.quantity, item.price]);
