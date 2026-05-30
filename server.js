@@ -2328,8 +2328,8 @@ async function pullOrdersFromDhd(apiToken, productsList, categoriesMap) {
               INSERT INTO orders (
                 customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
                 communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, 
-                status, dhd_status_label, ecotrack_tracking, createdAt, cod_payout_status
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, dhd_status_label, ecotrack_tracking, createdAt, cod_payout_status, is_legacy
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             `;
             let params = [
               client, phone, wilayaId, address, subtotal, prest, montant,
@@ -2346,8 +2346,8 @@ async function pullOrdersFromDhd(apiToken, productsList, categoriesMap) {
                     INSERT INTO orders (
                       id, customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
                       communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, 
-                      status, dhd_status_label, ecotrack_tracking, createdAt, cod_payout_status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      status, dhd_status_label, ecotrack_tracking, createdAt, cod_payout_status, is_legacy
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                   `;
                   params = [
                     parsedRef, client, phone, wilayaId, address, subtotal, prest, montant,
@@ -2869,6 +2869,13 @@ if (fs.existsSync(frontendIndexPath)) {
     res.sendFile(frontendIndexPath);
   });
 }
+
+app.get('/api/fix-legacy', (req, res) => {
+  db.run("UPDATE orders SET is_legacy = 1", [], function(err) {
+    if (err) return res.status(500).json({error: err.message});
+    res.json({success: true, updated: this.changes});
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
