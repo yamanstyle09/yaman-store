@@ -846,6 +846,14 @@ app.post('/api/communes/bulk-insert', authenticateToken, requireAdmin, (req, res
 
 // Orders
 app.get('/api/orders', authenticateToken, (req, res) => {
+  db.run("ALTER TABLE orders ADD COLUMN is_legacy INTEGER DEFAULT 0", () => {
+    // Migration: Update any existing orders that were wrongly labeled as test orders due to Validation status
+    db.run("UPDATE orders SET dhd_status_label = 'بانتظار التأكيد / التجهيز ⏳' WHERE dhd_status_label LIKE '%🧪%'", (err) => {
+      if (!err) {
+        console.log("Successfully migrated old validation/test labels to Pre-Hub labels.");
+      }
+    });
+  });
   db.all("SELECT * FROM orders WHERE is_legacy = 0 ORDER BY createdAt DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
