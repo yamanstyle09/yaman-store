@@ -850,7 +850,7 @@ app.get('/api/orders', authenticateToken, (req, res) => {
     // Migration: Update any existing orders that were wrongly labeled as test orders due to Validation status
     db.run("UPDATE orders SET dhd_status_label = 'بانتظار التأكيد / التجهيز ⏳' WHERE dhd_status_label LIKE '%🧪%'", (err) => {
       if (!err) {
-        console.log("Successfully migrated old validation/test labels to Pre-Hub labels.");
+        console.log("Successfully migrated old validation/test labels to Pre-Hub labels on startup.");
       }
     });
   });
@@ -1518,6 +1518,9 @@ app.post('/api/orders/:id/sync-dhd', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper for delay
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
 // Sync all active orders status from DHD in bulk/loop
 app.post('/api/orders/sync-all-dhd', authenticateToken, async (req, res) => {
   try {
@@ -1537,9 +1540,11 @@ app.post('/api/orders/sync-all-dhd', authenticateToken, async (req, res) => {
             updatedCount++;
           }
           results.push({ orderId: row.id, ...syncResult });
+          await delay(1500); // 1.5s delay to avoid DHD Rate Limit (HTTP 429)
         } catch (syncErr) {
           console.error(`[Bulk Sync] Failed for order ${row.id}:`, syncErr.message);
           results.push({ orderId: row.id, error: syncErr.message });
+          await delay(2000); // Wait longer on error
         }
       }
       
@@ -1560,8 +1565,10 @@ setInterval(() => {
     for (const row of rows) {
       try {
         await syncOrderWithDhd(row.id);
+        await delay(1500); // Prevent HTTP 429
       } catch (syncErr) {
         console.error(`[Background Sync] Failed for order ${row.id}:`, syncErr.message);
+        await delay(2000); // Wait longer on error
       }
     }
   });
