@@ -2842,6 +2842,48 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
     });
   });
 
+  const getInventoryAndPendingMetrics = () => new Promise((resolve) => {
+    db.get(`
+      SELECT 
+        (SELECT SUM(stock * purchasePrice) FROM categories WHERE stock > 0) as warehouseStockValue,
+        (SELECT SUM(oi.quantity * c.purchasePrice)
+         FROM orders o
+         JOIN order_items oi ON o.id = oi.orderId
+         JOIN products p ON oi.productId = p.id
+         JOIN categories c ON p.category = c.code
+         WHERE o.status IN ('confirmed', 'cancelled') 
+           AND o.ecotrack_tracking IS NOT NULL
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
+           AND (
+             o.dhd_status_label LIKE '%Prêt à expédier%' OR
+             o.dhd_status_label LIKE '%Ramassage%' OR
+             o.dhd_status_label LIKE '%Vers Station%' OR
+             o.dhd_status_label LIKE '%Vers Hub%' OR
+             o.dhd_status_label LIKE '%تم تسجيل الطلب%'
+           )
+        ) as preHubCost,
+        (SELECT SUM(oi.quantity)
+         FROM orders o
+         JOIN order_items oi ON o.id = oi.orderId
+         WHERE o.status IN ('confirmed', 'cancelled') 
+           AND o.ecotrack_tracking IS NOT NULL
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
+           AND (
+             o.dhd_status_label LIKE '%Prêt à expédier%' OR
+             o.dhd_status_label LIKE '%Ramassage%' OR
+             o.dhd_status_label LIKE '%Vers Station%' OR
+             o.dhd_status_label LIKE '%Vers Hub%' OR
+             o.dhd_status_label LIKE '%تم تسجيل الطلب%'
+           )
+        ) as preHubCount
+    `, [], (err, row) => {
+      stats.totals.warehouseStockValue = (row && row.warehouseStockValue) || 0;
+      stats.totals.preHubCost = (row && row.preHubCost) || 0;
+      stats.totals.preHubCount = (row && row.preHubCount) || 0;
+      resolve();
+    });
+  });
+
   const getDailyPerformance = () => new Promise((resolve) => {
     db.all(`
       SELECT 
@@ -2949,6 +2991,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
     getBorrowingsList(),
     getLoansDebt(),
     getCashReconciliationMetrics(),
+    getInventoryAndPendingMetrics(),
     getDhdInventoryMetrics()
   ]).then(() => {
     stats.investors = stats.investors.map(inv => {
