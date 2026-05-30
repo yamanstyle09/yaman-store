@@ -909,14 +909,16 @@ app.post('/api/orders', (req, res) => {
     
     const finalTotal = subtotal + finalAppliedDelivery - (parseInt(discount) || 0);
     
-    // 2. Fetch purchase prices and weights for categories and products to compute net profit and weight fees
-    db.all("SELECT code, purchasePrice, weight FROM categories", [], (catErr, catRows) => {
+    // 2. Fetch purchase prices, weights, and stock for categories and products to compute net profit and weight fees
+    db.all("SELECT code, purchasePrice, weight, stock FROM categories", [], (catErr, catRows) => {
       const purchasePriceMap = {};
       const weightMap = {};
+      const stockMap = {};
       if (!catErr && catRows) {
         catRows.forEach(row => {
           purchasePriceMap[row.code] = row.purchasePrice || 0;
           weightMap[row.code] = row.weight || 1.45;
+          stockMap[row.code] = row.stock || 0;
         });
       }
       
@@ -930,13 +932,34 @@ app.post('/api/orders', (req, res) => {
         
         let totalPurchaseCost = 0;
         let totalWeightRaw = 0;
+        let outOfStockError = null;
+        
+        // Accumulate requested quantities by category code to check against available stock
+        const requestedQuantities = {};
+        
         items.forEach(item => {
           const catCode = productCategoryMap[item.productId];
+          requestedQuantities[catCode] = (requestedQuantities[catCode] || 0) + item.quantity;
+          
           const purchasePrice = purchasePriceMap[catCode] || 0;
           const unitWeight = weightMap[catCode] || 1.45;
           totalPurchaseCost += purchasePrice * item.quantity;
           totalWeightRaw += unitWeight * item.quantity;
         });
+        
+        // Verify stock availability
+        for (const catCode of Object.keys(requestedQuantities)) {
+          const requested = requestedQuantities[catCode];
+          const available = stockMap[catCode] || 0;
+          if (requested > available) {
+            outOfStockError = `عذراً، الكمية المطلوبة (${requested}) للمنتج غير متوفرة في المخزن. المتوفر حالياً هو: ${available} قطعة.`;
+            break;
+          }
+        }
+        
+        if (outOfStockError) {
+          return res.status(400).json({ error: outOfStockError });
+        }
         
         // Match Ecotrack weight rounding logic
         const finalWeight = totalWeightRaw > 5.9
