@@ -442,7 +442,7 @@ function triggerEcotrackCreate(orderId) {
             return reject(itemsErr);
           }
 
-          const productNames = items.map(i => `${i.productName} x${i.quantity}`).join(', ');
+          const productNames = items.map(i => `${i.productCode} X ${i.quantity}`).join(' | ');
           const isStopDesk = order.deliveryType === 'desk' ? 1 : 0;
 
           // Weight calculation: each item uses its category weight (default 1.45 kg per unit)
