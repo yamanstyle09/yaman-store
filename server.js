@@ -768,7 +768,7 @@ app.post('/api/wilayas', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Communes API
-app.get('/api/communes', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/communes', authenticateToken, (req, res) => {
   db.all("SELECT * FROM communes ORDER BY wilayaId ASC, communeName ASC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
