@@ -5,5 +5,4 @@ store_backup_*.db
 .env
 uploads/*
 !uploads/.gitkeep
-public/
 *.log
