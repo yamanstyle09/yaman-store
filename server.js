@@ -709,12 +709,27 @@ app.get('/api/categories', (req, res) => {
 });
 
 app.post('/api/categories', authenticateToken, requireAdmin, (req, res) => {
-  const { code, name, price, purchasePrice, stock, features, weight } = req.body;
+  const { code, name, price, purchasePrice, features, weight } = req.body;
   const unitWeight = (typeof weight !== 'undefined' && weight !== null && weight !== '') ? parseFloat(weight) : 1.45;
-  db.run("INSERT OR REPLACE INTO categories (code, name, price, purchasePrice, stock, features, weight) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-    [code, name, price, purchasePrice || 0, typeof stock !== 'undefined' ? stock : 50, JSON.stringify(features || []), unitWeight], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, code });
+  const featsStr = JSON.stringify(features || []);
+
+  db.get("SELECT code FROM categories WHERE code = ?", [code], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row) {
+      // Update existing, do NOT touch stock
+      db.run("UPDATE categories SET name = ?, price = ?, purchasePrice = ?, features = ?, weight = ? WHERE code = ?",
+        [name, price, purchasePrice || 0, featsStr, unitWeight, code], function(err2) {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ success: true, code });
+      });
+    } else {
+      // Insert new, stock will default to 0
+      db.run("INSERT INTO categories (code, name, price, purchasePrice, stock, features, weight) VALUES (?, ?, ?, ?, 0, ?, ?)",
+        [code, name, price, purchasePrice || 0, featsStr, unitWeight], function(err2) {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ success: true, code });
+      });
+    }
   });
 });
 
