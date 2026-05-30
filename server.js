@@ -2853,16 +2853,19 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN categories c ON p.category = c.code
          WHERE o.is_legacy = 0
            AND o.status != 'cancelled'
+           AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
              o.status = 'new' OR
              (o.status = 'confirmed' AND (
-               o.dhd_status_label LIKE '%Prêt à expédier%' OR
-               o.dhd_status_label LIKE '%Ramassage%' OR
-               o.dhd_status_label LIKE '%Vers Station%' OR
-               o.dhd_status_label LIKE '%Vers Hub%' OR
-               o.dhd_status_label LIKE '%تم تسجيل الطلب%' OR
-               o.ecotrack_tracking IS NULL
+               o.dhd_status_label IS NULL OR
+               NOT (
+                 o.dhd_status_label LIKE '%En Hub%' OR
+                 o.dhd_status_label LIKE '%Vers Wilaya%' OR
+                 o.dhd_status_label LIKE '%En Cours de Livraison%' OR
+                 o.dhd_status_label LIKE '%En attente du client%' OR
+                 o.dhd_status_label LIKE '%Sorti en livraison%'
+               )
              ))
            )
         ) as preHubCost,
@@ -2871,16 +2874,19 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN order_items oi ON o.id = oi.orderId
          WHERE o.is_legacy = 0
            AND o.status != 'cancelled'
+           AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
              o.status = 'new' OR
              (o.status = 'confirmed' AND (
-               o.dhd_status_label LIKE '%Prêt à expédier%' OR
-               o.dhd_status_label LIKE '%Ramassage%' OR
-               o.dhd_status_label LIKE '%Vers Station%' OR
-               o.dhd_status_label LIKE '%Vers Hub%' OR
-               o.dhd_status_label LIKE '%تم تسجيل الطلب%' OR
-               o.ecotrack_tracking IS NULL
+               o.dhd_status_label IS NULL OR
+               NOT (
+                 o.dhd_status_label LIKE '%En Hub%' OR
+                 o.dhd_status_label LIKE '%Vers Wilaya%' OR
+                 o.dhd_status_label LIKE '%En Cours de Livraison%' OR
+                 o.dhd_status_label LIKE '%En attente du client%' OR
+                 o.dhd_status_label LIKE '%Sorti en livraison%'
+               )
              ))
            )
         ) as preHubCount
