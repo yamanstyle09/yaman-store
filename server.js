@@ -2852,6 +2852,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
          WHERE o.status IN ('confirmed', 'cancelled') 
+           AND o.createdAt >= '2026-05-30'
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
@@ -2866,6 +2867,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          FROM orders o
          JOIN order_items oi ON o.id = oi.orderId
          WHERE o.status IN ('confirmed', 'cancelled') 
+           AND o.createdAt >= '2026-05-30'
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
