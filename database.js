@@ -240,6 +240,8 @@ const initDb = () => {
       db.run("ALTER TABLE orders ADD COLUMN ecotrack_tracking TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN dhd_status_label TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN cod_payout_status TEXT DEFAULT 'pending_payout'", [], (e) => {});
+      db.run("ALTER TABLE orders ADD COLUMN is_legacy INTEGER DEFAULT 0", [], (e) => {});
+      db.run("ALTER TABLE orders ADD COLUMN worker_code TEXT DEFAULT ''", [], (e) => {});
     });
 
     // Order Items
