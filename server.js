@@ -1369,6 +1369,7 @@ function getDhdArabicStatusLabel(dhdStatus, reason, content) {
     norm.includes('en livraison') || 
     norm.includes('in transit') || 
     norm.includes('shipped') || 
+    norm.includes('accepted_by_carrier') || 
     norm.includes('expedie') || 
     norm.includes('en route') || 
     norm.includes('vers hub') || 
