@@ -2689,9 +2689,6 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 
 
- });
-});
-
 app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.query;
   let dOrders = '';
