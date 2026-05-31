@@ -2690,21 +2690,6 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 
 
-app.get('/api/admin/nuke-everything', (req, res) => {
-  db.all("SELECT name FROM sqlite_master WHERE type='table'", [], (err, tables) => {
-    db.serialize(() => {
-      tables.forEach(t => {
-        if (t.name !== 'sqlite_sequence' && t.name !== 'users') {
-          db.run(`DROP TABLE IF EXISTS ${t.name}`);
-        }
-      });
-      db.run("DELETE FROM users WHERE username NOT IN ('admin', 'leila')");
-      res.json({ message: 'Nuke successful. Server restarting...' });
-      setTimeout(() => process.exit(0), 1000);
-    });
-  });
-});
-
 app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.query;
   let dOrders = '';
