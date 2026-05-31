@@ -2204,10 +2204,8 @@ async function pullOrdersFromDhd(apiToken, productsList, categoriesMap) {
       const dhdStatusId = parseInt(dhdOrder.status_id || dhdOrder.etat_id) || 0;
       const normStatus = dhdStatus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const isPreTransit = (
-        dhdStatusId === 1 || dhdStatusId === 2 || dhdStatusId === 102 ||
-        normStatus.includes('pret a expedier') || normStatus === 'pret' ||
-        normStatus.includes('en ramassage') || normStatus === 'ramassage' ||
-        normStatus.includes('vers station')
+        dhdStatusId === 1 ||
+        normStatus.includes('pret a expedier') || normStatus === 'pret'
       );
       if (isPreTransit) {
         console.log(`[DHD Pull] Skipping pre-transit order ${tracking} (status: ${dhdOrder.status})`);
@@ -2859,9 +2857,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND o.dhd_status_label NOT LIKE '%Prêt à expédier%'
-           AND o.dhd_status_label NOT LIKE '%Ramassage%'
-           AND o.dhd_status_label NOT LIKE '%Vers Station%'
-           AND o.dhd_status_label NOT LIKE '%Vers Hub%'
+           /* Removed Ramassage, Vers Station, Vers Hub from exclusions so they count as In-Transit */
            AND o.dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
         ) as confirmedTotal,
         (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as deliveredNotCashedNet
@@ -2923,7 +2919,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
                  o.dhd_status_label LIKE '%Vers Wilaya%' OR
                  o.dhd_status_label LIKE '%En Cours de Livraison%' OR
                  o.dhd_status_label LIKE '%En attente du client%' OR
-                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%'
+                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%' OR o.dhd_status_label LIKE '%Ramassage%' OR o.dhd_status_label LIKE '%Vers Station%' OR o.dhd_status_label LIKE '%Vers Hub%'
                )
              ))
            )
@@ -2944,7 +2940,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
                  o.dhd_status_label LIKE '%Vers Wilaya%' OR
                  o.dhd_status_label LIKE '%En Cours de Livraison%' OR
                  o.dhd_status_label LIKE '%En attente du client%' OR
-                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%'
+                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%' OR o.dhd_status_label LIKE '%Ramassage%' OR o.dhd_status_label LIKE '%Vers Station%' OR o.dhd_status_label LIKE '%Vers Hub%'
                )
              ))
            )
