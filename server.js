@@ -2690,6 +2690,32 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 
 
+
+app.get('/api/admin/clean-slate', (req, res) => {
+  const tablesToClear = [
+    'order_items', 'orders', 'products', 'categories', 
+    'expenses', 'inventory_purchases', 'ad_spend', 
+    'investors', 'borrowings', 'employee_payments'
+  ];
+  
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+    tablesToClear.forEach(t => {
+      db.run(`DELETE FROM ${t}`);
+      db.run(`DELETE FROM sqlite_sequence WHERE name = '${t}'`);
+    });
+    db.run("DELETE FROM users WHERE username NOT IN ('admin', 'leila')");
+    
+    db.run('COMMIT', (err) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({ message: 'Clean slate successful! All data wiped except users.' });
+      }
+    });
+  });
+});
+
 app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.query;
   let dOrders = '';
