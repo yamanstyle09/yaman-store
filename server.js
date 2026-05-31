@@ -2855,7 +2855,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN order_items oi ON o.id = oi.orderId
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
-         WHERE o.status IN ('confirmed', 'cancelled', 'returning') 
+         WHERE o.status IN ('confirmed', 'returning') 
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND o.dhd_status_label NOT LIKE '%Prêt à expédier%'
