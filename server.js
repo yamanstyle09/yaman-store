@@ -1504,15 +1504,17 @@ function syncOrderWithDhd(orderId) {
               let newSystemStatus = order.status;
               
               // Map DHD status to system status
-              const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'payé', 'payé_et_archivé', 'paye_et_archive', 'encaisse_non_paye', 'encaissé_non_payé', 'encaisse_non_paye_et_archive', 'encaissé_non_payé_et_archivé', 'livré_non_encaissé', 'livre_non_encaisse'];
-              const returningStatuses = ['returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'retourné', 'retourne', 'retour_en_traitement'];
-              const cancelledStatuses = ['annule', 'annulé', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retour_reçu', 'retour_recu'];
+              const normStatusForMap = String(dhdStatus).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_');
               
-              if (deliveredStatuses.includes(dhdStatus)) {
+              const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'paye_et_archive', 'encaisse_non_paye', 'encaisse_non_paye_et_archive', 'livre_non_encaisse'];
+              const returningStatuses = ['returned', 'returned_to_shipper', 'retourne_a_l\'expediteur', 'retourne', 'retour_en_traitement'];
+              const cancelledStatuses = ['annule', 'recu_par_expediteur', 'retour_recu'];
+              
+              if (deliveredStatuses.includes(normStatusForMap)) {
                 newSystemStatus = 'delivered';
-              } else if (returningStatuses.includes(dhdStatus)) {
+              } else if (returningStatuses.includes(normStatusForMap)) {
                 newSystemStatus = 'returning';
-              } else if (cancelledStatuses.includes(dhdStatus)) {
+              } else if (cancelledStatuses.includes(normStatusForMap)) {
                 newSystemStatus = 'cancelled';
               }
               
@@ -2212,15 +2214,17 @@ async function pullOrdersFromDhd(apiToken, productsList, categoriesMap) {
       }
       
       let newSystemStatus = 'confirmed';
-      const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'payé', 'payé_et_archivé', 'paye_et_archive', 'encaisse_non_paye', 'encaissé_non_payé', 'encaisse_non_paye_et_archive', 'encaissé_non_payé_et_archivé', 'livré_non_encaissé', 'livre_non_encaisse'];
-      const returningStatuses = ['returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'retourné', 'retourne', 'retour_en_traitement'];
-      const cancelledStatuses = ['annule', 'annulé', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retour_reçu', 'retour_recu'];
+      const normStatusForMap = dhdStatus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_');
       
-      if (deliveredStatuses.includes(dhdStatus)) {
+      const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'paye_et_archive', 'encaisse_non_paye', 'encaisse_non_paye_et_archive', 'livre_non_encaisse'];
+      const returningStatuses = ['returned', 'returned_to_shipper', 'retourne_a_l\'expediteur', 'retourne', 'retour_en_traitement'];
+      const cancelledStatuses = ['annule', 'recu_par_expediteur', 'retour_recu'];
+      
+      if (deliveredStatuses.includes(normStatusForMap)) {
         newSystemStatus = 'delivered';
-      } else if (returningStatuses.includes(dhdStatus)) {
+      } else if (returningStatuses.includes(normStatusForMap)) {
         newSystemStatus = 'returning';
-      } else if (cancelledStatuses.includes(dhdStatus)) {
+      } else if (cancelledStatuses.includes(normStatusForMap)) {
         newSystemStatus = 'cancelled';
       }
       
