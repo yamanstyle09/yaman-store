@@ -1,3 +1,11 @@
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -2704,7 +2712,9 @@ app.get('/api/admin/clean-slate', (req, res) => {
       db.run(`DELETE FROM ${t}`);
       db.run(`DELETE FROM sqlite_sequence WHERE name = '${t}'`);
     });
-    db.run("DELETE FROM users WHERE username NOT IN ('admin', 'leila')");
+    db.run("DELETE FROM system_users WHERE email NOT LIKE '%admin%' AND email NOT LIKE '%leila%' AND name NOT LIKE '%ليلى%' AND name NOT LIKE '%admin%'", (err) => {
+      if (err) console.error("Error deleting users:", err);
+    });
     
     db.run('COMMIT', (err) => {
       if (err) {
