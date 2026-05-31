@@ -2878,7 +2878,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       // 2. Ready for collection: delivered & cashed by DHD (تم التحصيل وبانتظار السحب 💰) but not paid to merchant yet
       db.get(`
         SELECT 
-          (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%وبانتظار السحب%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredCashedNet,
+          (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label NOT LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredCashedNet,
           (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as cancelledNet
       `, [], (err2, row2) => {
         const deliveredCashedNet = (row2 && row2.deliveredCashedNet) || 0;
