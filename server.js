@@ -2688,6 +2688,13 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 
 
+
+app.get('/api/admin/check-stock', (req, res) => {
+  db.all('SELECT code, stock FROM categories WHERE stock > 0', [], (err, rows) => {
+    res.json(rows);
+  });
+});
+
 app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.query;
   let dOrders = '';
