@@ -2923,7 +2923,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
                  o.dhd_status_label LIKE '%Vers Wilaya%' OR
                  o.dhd_status_label LIKE '%En Cours de Livraison%' OR
                  o.dhd_status_label LIKE '%En attente du client%' OR
-                 o.dhd_status_label LIKE '%Sorti en livraison%'
+                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%'
                )
              ))
            )
@@ -2944,7 +2944,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
                  o.dhd_status_label LIKE '%Vers Wilaya%' OR
                  o.dhd_status_label LIKE '%En Cours de Livraison%' OR
                  o.dhd_status_label LIKE '%En attente du client%' OR
-                 o.dhd_status_label LIKE '%Sorti en livraison%'
+                 o.dhd_status_label LIKE '%Sorti en livraison%' OR o.dhd_status_label LIKE '%accepted_by_carrier%' OR o.dhd_status_label LIKE '%قيد التوصيل%'
                )
              ))
            )
