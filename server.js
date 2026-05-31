@@ -2690,7 +2690,235 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 
 
+app.get('/api/admin/nuke-everything', (req, res) => {
+  db.all("SELECT name FROM sqlite_master WHERE type='table'", [], (err, tables) => {
+    db.serialize(() => {
+      tables.forEach(t => {
+        if (t.name !== 'sqlite_sequence' && t.name !== 'users') {
+          db.run(`DROP TABLE IF EXISTS ${t.name}`);
+        }
+      });
+      db.run("DELETE FROM users WHERE username NOT IN ('admin', 'leila')");
+      res.json({ message: 'Nuke successful. Server restarting...' });
+      setTimeout(() => process.exit(0), 1000);
+    });
+  });
+});
 
+app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
+  const { startDate, endDate } = req.query;
+  let dOrders = '';
+  let dExp = '';
+  let dSal = '';
+  let dAd = '';
+  let dDebt = '';
+  let dBorr = '';
+  
+  if (startDate && endDate) {
+    dOrders = ` AND date(createdAt) BETWEEN date('${startDate}') AND date('${endDate}')`;
+    dExp = ` WHERE date(date) BETWEEN date('${startDate}') AND date('${endDate}')`;
+    dSal = ` WHERE date(payment_date) BETWEEN date('${startDate}') AND date('${endDate}')`;
+    dAd = ` WHERE date(date) BETWEEN date('${startDate}') AND date('${endDate}')`;
+    dDebt = ` WHERE date(purchase_date) BETWEEN date('${startDate}') AND date('${endDate}')`;
+    dBorr = ` WHERE date(loan_date) BETWEEN date('${startDate}') AND date('${endDate}')`;
+  }
+
+  const stats = {
+    investors: [],
+    borrowings: [],
+    totals: {
+      sales: 0,
+      netProfit: 0,
+      subtotal: 0,
+      expenses: 0,
+      salaries: 0,
+      adSpend: 0,
+      supplierDebt: 0,
+      loansDebt: 0,
+      pendingCollection: 0,
+      deliveredNotCashed: 0,
+      readyForCollection: 0,
+      collectedCash: 0
+    },
+    shipping: {
+      total: 0,
+      inTransit: 0,
+      delivered: 0,
+      returned: 0,
+      deliveryRate: 0,
+      returnRate: 0
+    },
+    dailyPerformance: []
+  };
+
+  const getInvestors = () => new Promise((resolve) => {
+    db.all("SELECT * FROM investors", [], (err, rows) => {
+      stats.investors = rows || [];
+      resolve();
+    });
+  });
+
+  const getBorrowingsList = () => new Promise((resolve) => {
+    db.all("SELECT * FROM borrowings ORDER BY loan_date DESC", [], (err, rows) => {
+      stats.borrowings = rows || [];
+      resolve();
+    });
+  });
+
+  const getDeliveredOrders = () => new Promise((resolve) => {
+    db.get(`
+      SELECT 
+        COUNT(*) as count, 
+        SUM(total) as totalSales, 
+        SUM(subtotal) as totalSubtotal 
+      FROM orders 
+      WHERE status = 'delivered' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ${dOrders}
+    `, [], (err, row) => {
+      if (row) {
+        stats.totals.sales = row.totalSales || 0;
+        stats.totals.subtotal = row.totalSubtotal || 0;
+      }
+      
+      // Calculate overall net profit including both delivered and cancelled orders, excluding test orders
+      db.get(`
+        SELECT SUM(netProfit) as totalNetProfit 
+        FROM orders 
+        WHERE (status = 'delivered' OR status = 'cancelled') AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ${dOrders}
+      `, [], (errProfit, rowProfit) => {
+        stats.totals.netProfit = (rowProfit && rowProfit.totalNetProfit) || 0;
+        resolve();
+      });
+    });
+  });
+
+  const getShippingMetrics = () => new Promise((resolve) => {
+    db.all(`
+      SELECT status, COUNT(*) as count 
+      FROM orders 
+      WHERE ecotrack_tracking IS NOT NULL 
+        AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%'
+        AND dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
+        AND dhd_status_label NOT LIKE '%جاهز للشحن%'
+        AND dhd_status_label NOT LIKE '%بانتظار التأكيد%'
+        AND dhd_status_label NOT LIKE '%قيد الاستلام%'
+        AND dhd_status_label NOT LIKE '%شحنة متوجهة للمحطة%'
+        AND dhd_status_label NOT LIKE '%شحنة في المحطة%'
+        AND dhd_status_label NOT LIKE '%شحنة متوجهة للمركز%'
+        AND dhd_status_label NOT LIKE '%شحنة في المركز%'
+      GROUP BY status
+    `, [], (err, rows) => {
+      if (rows) {
+        let total = 0;
+        let inTransit = 0;
+        let delivered = 0;
+        let returned = 0;
+        
+        rows.forEach(r => {
+          total += r.count;
+          if (r.status === 'delivered') delivered = r.count;
+          else if (r.status === 'cancelled' || r.status === 'returning') returned += r.count;
+          else inTransit += r.count; // confirmed, processing, etc.
+        });
+
+        stats.shipping.total = total;
+        stats.shipping.inTransit = inTransit;
+        stats.shipping.delivered = delivered;
+        stats.shipping.returned = returned;
+        stats.shipping.deliveryRate = total > 0 ? parseFloat(((delivered / total) * 100).toFixed(1)) : 0;
+        stats.shipping.returnRate = total > 0 ? parseFloat(((returned / total) * 100).toFixed(1)) : 0;
+      }
+      resolve();
+    });
+  });
+
+  const getExpenses = () => new Promise((resolve) => {
+    db.get(`SELECT SUM(amount) as total FROM expenses ${dExp}`, [], (err, row) => {
+      stats.totals.expenses = (row && row.total) || 0;
+      resolve();
+    });
+  });
+
+  const getSalaries = () => new Promise((resolve) => {
+    db.get(`SELECT SUM(amount_paid) as total FROM employee_payments ${dSal}`, [], (err, row) => {
+      stats.totals.salaries = (row && row.total) || 0;
+      resolve();
+    });
+  });
+
+  const getAdSpend = () => new Promise((resolve) => {
+    db.get(`SELECT SUM(amount) as total FROM ad_spend ${dAd}`, [], (err, row) => {
+      stats.totals.adSpend = (row && row.total) || 0;
+      resolve();
+    });
+  });
+
+  const getDebts = () => new Promise((resolve) => {
+    db.get(`SELECT SUM(amount_debt) as total FROM inventory_purchases ${dDebt}`, [], (err, row) => {
+      stats.totals.supplierDebt = (row && row.total) || 0;
+      resolve();
+    });
+  });
+
+  const getLoansDebt = () => new Promise((resolve) => {
+    db.get(`SELECT SUM(amount_debt) as total FROM borrowings ${dBorr}`, [], (err, row) => {
+      stats.totals.loansDebt = (row && row.total) || 0;
+      resolve();
+    });
+  });
+
+  const getCashReconciliationMetrics = () => new Promise((resolve) => {
+    // 1. Pending collection (in transit): the TOTAL sale value (montant = total) of confirmed orders at DHD
+    // Before delivery: money is "at DHD" valued at full sale price (total)
+    db.get(`
+      SELECT 
+        (SELECT SUM(oi.quantity * c.purchasePrice)
+         FROM orders o
+         JOIN order_items oi ON o.id = oi.orderId
+         JOIN products p ON oi.productId = p.id
+         JOIN categories c ON p.category = c.code
+         WHERE o.status IN ('confirmed', 'returning') 
+           AND o.ecotrack_tracking IS NOT NULL
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
+           AND o.dhd_status_label NOT LIKE '%جاهز للشحن%'
+           AND o.dhd_status_label NOT LIKE '%بانتظار التأكيد%'
+           /* Removed Ramassage, Vers Station, Vers Hub from exclusions so they count as In-Transit */
+           AND o.dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
+        ) as confirmedTotal,
+        (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredNotCashedNet
+    `, [], (err1, row1) => {
+      const confirmedCost = (row1 && row1.confirmedTotal) || 0;
+      const deliveredNotCashedNet = (row1 && row1.deliveredNotCashedNet) || 0;
+      
+      // pendingCollection = total sale value of packages in transit at DHD (before delivery)
+      stats.totals.pendingCollection = confirmedCost;
+      
+      // deliveredNotCashed is dedicated for delivered packages not yet cashed by DHD!
+      stats.totals.deliveredNotCashed = deliveredNotCashedNet;
+      
+      // 2. Ready for collection: delivered & cashed by DHD (تم التحصيل وبانتظار السحب 💰) but not paid to merchant yet
+      db.get(`
+        SELECT 
+          (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label NOT LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredCashedNet,
+          (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as cancelledNet
+      `, [], (err2, row2) => {
+        const deliveredCashedNet = (row2 && row2.deliveredCashedNet) || 0;
+        const cancelledNet = (row2 && row2.cancelledNet) || 0;
+        stats.totals.readyForCollection = deliveredCashedNet - cancelledNet;
+        
+        // 3. Collected cash: delivered payout received MINUS cancelled payout received
+        db.get(`
+          SELECT 
+            (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredNet,
+            (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as cancelledNet
+        `, [], (err3, row3) => {
+          const deliveredNet = (row3 && row3.deliveredNet) || 0;
+          const cancelledNet = (row3 && row3.cancelledNet) || 0;
+          stats.totals.collectedCash = deliveredNet - cancelledNet;
+          resolve();
+        });
+      });
+    });
+  });
 
   const getInventoryAndPendingMetrics = () => new Promise((resolve) => {
     db.get(`
