@@ -2778,10 +2778,13 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       WHERE ecotrack_tracking IS NOT NULL 
         AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%'
         AND dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
-        AND dhd_status_label NOT LIKE '%Prêt à expédier%'
-        AND dhd_status_label NOT LIKE '%Ramassage%'
-        AND dhd_status_label NOT LIKE '%Vers Station%'
-        AND dhd_status_label NOT LIKE '%Vers Hub%'
+        AND dhd_status_label NOT LIKE '%جاهز للشحن%'
+        AND dhd_status_label NOT LIKE '%بانتظار التأكيد%'
+        AND dhd_status_label NOT LIKE '%قيد الاستلام%'
+        AND dhd_status_label NOT LIKE '%شحنة متوجهة للمحطة%'
+        AND dhd_status_label NOT LIKE '%شحنة في المحطة%'
+        AND dhd_status_label NOT LIKE '%شحنة متوجهة للمركز%'
+        AND dhd_status_label NOT LIKE '%شحنة في المركز%'
       GROUP BY status
     `, [], (err, rows) => {
       if (rows) {
@@ -2856,7 +2859,8 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          WHERE o.status IN ('confirmed', 'returning') 
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
-           AND o.dhd_status_label NOT LIKE '%Prêt à expédier%'
+           AND o.dhd_status_label NOT LIKE '%جاهز للشحن%'
+           AND o.dhd_status_label NOT LIKE '%بانتظار التأكيد%'
            /* Removed Ramassage, Vers Station, Vers Hub from exclusions so they count as In-Transit */
            AND o.dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
         ) as confirmedTotal,
