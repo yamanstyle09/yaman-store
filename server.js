@@ -2686,36 +2686,7 @@ app.post('/api/orders/pull-from-dhd', authenticateToken, requireAdmin, async (re
 
 // 8. UNIFIED ERP SUMMARY & METRICS
 
-// TEMPORARY ENDPOINT FOR FACTORY RESET
-app.post('/api/admin/factory-reset-orders', (req, res) => {
-  if (req.body.secret !== 'yaman123reset') return res.status(403).send('Forbidden');
-  
-  db.serialize(() => {
-    db.run('BEGIN TRANSACTION');
-    
-    // 1. Reset all stock
-    db.run('UPDATE products SET stock = 0');
-    db.run('UPDATE categories SET stock = 0');
-    
-    // 2. Delete order_items for orders that are going to be deleted
-    db.run(`DELETE FROM order_items WHERE orderId IN (
-      SELECT id FROM orders 
-      WHERE NOT (status = 'delivered' AND cod_payout_status = 'pending_payout' AND IFNULL(dhd_status_label, '') NOT LIKE '%🧪%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%')
-    )`);
-    
-    // 3. Delete the orders themselves
-    db.run(`DELETE FROM orders 
-      WHERE NOT (status = 'delivered' AND cod_payout_status = 'pending_payout' AND IFNULL(dhd_status_label, '') NOT LIKE '%🧪%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%')
-    `, [], function(err) {
-      if (err) {
-        db.run('ROLLBACK');
-        return res.status(500).json({ error: err.message });
-      }
-      db.run('COMMIT');
-      res.json({ message: 'Factory reset successful', deletedCount: this.changes });
-    });
-  });
-});
+
 
 app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.query;
