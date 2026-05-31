@@ -1505,10 +1505,13 @@ function syncOrderWithDhd(orderId) {
               
               // Map DHD status to system status
               const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'payé', 'payé_et_archivé', 'paye_et_archive', 'encaisse_non_paye', 'encaissé_non_payé', 'encaisse_non_paye_et_archive', 'encaissé_non_payé_et_archivé', 'livré_non_encaissé', 'livre_non_encaisse'];
-              const cancelledStatuses = ['annule', 'annulé', 'returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retourné', 'retourne', 'retour_reçu', 'retour_recu', 'retour_en_traitement'];
+              const returningStatuses = ['returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'retourné', 'retourne', 'retour_en_traitement'];
+              const cancelledStatuses = ['annule', 'annulé', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retour_reçu', 'retour_recu'];
               
               if (deliveredStatuses.includes(dhdStatus)) {
                 newSystemStatus = 'delivered';
+              } else if (returningStatuses.includes(dhdStatus)) {
+                newSystemStatus = 'returning';
               } else if (cancelledStatuses.includes(dhdStatus)) {
                 newSystemStatus = 'cancelled';
               }
@@ -2210,10 +2213,13 @@ async function pullOrdersFromDhd(apiToken, productsList, categoriesMap) {
       
       let newSystemStatus = 'confirmed';
       const deliveredStatuses = ['delivered', 'package_delivered', 'delivered_to_customer', 'paye', 'payé', 'payé_et_archivé', 'paye_et_archive', 'encaisse_non_paye', 'encaissé_non_payé', 'encaisse_non_paye_et_archive', 'encaissé_non_payé_et_archivé', 'livré_non_encaissé', 'livre_non_encaisse'];
-      const cancelledStatuses = ['annule', 'annulé', 'returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retourné', 'retourne', 'retour_reçu', 'retour_recu', 'retour_en_traitement'];
+      const returningStatuses = ['returned', 'returned_to_shipper', 'retourné_a_l\'expéditeur', 'retourne_a_l\'expediteur', 'retourné', 'retourne', 'retour_en_traitement'];
+      const cancelledStatuses = ['annule', 'annulé', 'reçu_par_expéditeur', 'recu_par_expediteur', 'retour_reçu', 'retour_recu'];
       
       if (deliveredStatuses.includes(dhdStatus)) {
         newSystemStatus = 'delivered';
+      } else if (returningStatuses.includes(dhdStatus)) {
+        newSystemStatus = 'returning';
       } else if (cancelledStatuses.includes(dhdStatus)) {
         newSystemStatus = 'cancelled';
       }
@@ -2784,7 +2790,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         rows.forEach(r => {
           total += r.count;
           if (r.status === 'delivered') delivered = r.count;
-          else if (r.status === 'cancelled') returned = r.count;
+          else if (r.status === 'cancelled' || r.status === 'returning') returned += r.count;
           else inTransit += r.count; // confirmed, processing, etc.
         });
 
@@ -2844,7 +2850,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN order_items oi ON o.id = oi.orderId
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
-         WHERE o.status IN ('confirmed', 'cancelled') 
+         WHERE o.status IN ('confirmed', 'cancelled', 'returning') 
            AND o.ecotrack_tracking IS NOT NULL
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND o.dhd_status_label NOT LIKE '%Prêt à expédier%'
@@ -2868,7 +2874,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       db.get(`
         SELECT 
           (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%وبانتظار السحب%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as deliveredCashedNet,
-          (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'cancelled' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as cancelledNet
+          (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as cancelledNet
       `, [], (err2, row2) => {
         const deliveredCashedNet = (row2 && row2.deliveredCashedNet) || 0;
         const cancelledNet = (row2 && row2.cancelledNet) || 0;
@@ -2878,7 +2884,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         db.get(`
           SELECT 
             (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as deliveredNet,
-            (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'cancelled' AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as cancelledNet
+            (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL)) as cancelledNet
         `, [], (err3, row3) => {
           const deliveredNet = (row3 && row3.deliveredNet) || 0;
           const cancelledNet = (row3 && row3.cancelledNet) || 0;
@@ -2900,7 +2906,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN products p ON oi.productId = p.id
          JOIN categories c ON p.category = c.code
          WHERE IFNULL(o.is_legacy, 0) = 0
-           AND o.status != 'cancelled'
+           AND o.status NOT IN ('cancelled', 'returning')
            AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
@@ -2921,7 +2927,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          FROM orders o
          JOIN order_items oi ON o.id = oi.orderId
          WHERE IFNULL(o.is_legacy, 0) = 0
-           AND o.status != 'cancelled'
+           AND o.status NOT IN ('cancelled', 'returning')
            AND o.status != 'delivered'
            AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL)
            AND (
@@ -2953,7 +2959,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         DATE(o.createdAt) as date, 
         COUNT(o.id) as orderCount,
         SUM(CASE WHEN o.status = 'delivered' THEN 1 ELSE 0 END) as deliveredCount,
-        SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) as returnedCount,
+        SUM(CASE WHEN o.status IN ('cancelled', 'returning') THEN 1 ELSE 0 END) as returnedCount,
         SUM(oi.quantity) as totalPieces
       FROM orders o
       LEFT JOIN order_items oi ON o.id = oi.orderId
@@ -3033,7 +3039,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
           };
           if (r.status === 'confirmed') {
             stats.dhdInventory.inTransit.push(item);
-          } else if (r.status === 'cancelled') {
+          } else if (r.status === 'cancelled' || r.status === 'returning') {
             stats.dhdInventory.returned.push(item);
           }
         });
@@ -3094,10 +3100,10 @@ app.get('/api/analytics/worker-performance', authenticateToken, (req, res) => {
     SELECT 
       worker_code as workerCode,
       COUNT(*) as totalInput,
-      SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) as validated,
+      SUM(CASE WHEN status NOT IN ('cancelled', 'returning') THEN 1 ELSE 0 END) as validated,
       SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
-      SUM(CASE WHEN status = 'cancelled' OR dhd_status_label LIKE '%Retour%' THEN 1 ELSE 0 END) as returned,
-      SUM(CASE WHEN status NOT IN ('delivered', 'cancelled') AND (dhd_status_label IS NULL OR dhd_status_label NOT LIKE '%Retour%') THEN 1 ELSE 0 END) as inTransit
+      SUM(CASE WHEN status IN ('cancelled', 'returning') OR dhd_status_label LIKE '%Retour%' THEN 1 ELSE 0 END) as returned,
+      SUM(CASE WHEN status NOT IN ('delivered', 'cancelled', 'returning') AND (dhd_status_label IS NULL OR dhd_status_label NOT LIKE '%Retour%') THEN 1 ELSE 0 END) as inTransit
     FROM orders
     WHERE worker_code IS NOT NULL AND worker_code != '' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) ${dateFilter} ${workerFilter}
     GROUP BY worker_code
