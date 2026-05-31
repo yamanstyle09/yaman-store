@@ -2099,7 +2099,7 @@ app.delete('/api/borrowings/:id', authenticateToken, requireAdmin, (req, res) =>
 
 // 7.6 CASH RECONCILIATION & COD PAYOUTS API
 app.get('/api/orders/delivered', authenticateToken, (req, res) => {
-  db.all("SELECT * FROM orders WHERE status = 'delivered' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%' ORDER BY createdAt DESC", [], (err, rows) => {
+  db.all("SELECT * FROM orders WHERE status = 'delivered' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ORDER BY createdAt DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -2752,7 +2752,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         SUM(total) as totalSales, 
         SUM(subtotal) as totalSubtotal 
       FROM orders 
-      WHERE status = 'delivered' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%' ${dOrders}
+      WHERE status = 'delivered' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ${dOrders}
     `, [], (err, row) => {
       if (row) {
         stats.totals.sales = row.totalSales || 0;
@@ -2763,7 +2763,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       db.get(`
         SELECT SUM(netProfit) as totalNetProfit 
         FROM orders 
-        WHERE (status = 'delivered' OR status = 'cancelled') AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%' ${dOrders}
+        WHERE (status = 'delivered' OR status = 'cancelled') AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ${dOrders}
       `, [], (errProfit, rowProfit) => {
         stats.totals.netProfit = (rowProfit && rowProfit.totalNetProfit) || 0;
         resolve();
@@ -2776,7 +2776,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       SELECT status, COUNT(*) as count 
       FROM orders 
       WHERE ecotrack_tracking IS NOT NULL 
-        AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%'
+        AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%'
         AND dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
         AND dhd_status_label NOT LIKE '%Prêt à expédier%'
         AND dhd_status_label NOT LIKE '%Ramassage%'
@@ -2855,12 +2855,12 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          JOIN categories c ON p.category = c.code
          WHERE o.status IN ('confirmed', 'returning') 
            AND o.ecotrack_tracking IS NOT NULL
-           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%test%' AND IFNULL(o.customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%essai%'
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
            AND o.dhd_status_label NOT LIKE '%Prêt à expédier%'
            /* Removed Ramassage, Vers Station, Vers Hub from exclusions so they count as In-Transit */
            AND o.dhd_status_label NOT LIKE '%تم تسجيل الطلب%'
         ) as confirmedTotal,
-        (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%') as deliveredNotCashedNet
+        (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%تحصيل السائق%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredNotCashedNet
     `, [], (err1, row1) => {
       const confirmedCost = (row1 && row1.confirmedTotal) || 0;
       const deliveredNotCashedNet = (row1 && row1.deliveredNotCashedNet) || 0;
@@ -2874,8 +2874,8 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       // 2. Ready for collection: delivered & cashed by DHD (تم التحصيل وبانتظار السحب 💰) but not paid to merchant yet
       db.get(`
         SELECT 
-          (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%وبانتظار السحب%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%') as deliveredCashedNet,
-          (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%') as cancelledNet
+          (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND dhd_status_label LIKE '%وبانتظار السحب%' AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredCashedNet,
+          (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'pending_payout' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as cancelledNet
       `, [], (err2, row2) => {
         const deliveredCashedNet = (row2 && row2.deliveredCashedNet) || 0;
         const cancelledNet = (row2 && row2.cancelledNet) || 0;
@@ -2884,8 +2884,8 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
         // 3. Collected cash: delivered payout received MINUS cancelled payout received
         db.get(`
           SELECT 
-            (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%') as deliveredNet,
-            (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%') as cancelledNet
+            (SELECT SUM(total - IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status = 'delivered' AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as deliveredNet,
+            (SELECT SUM(IFNULL(realDeliveryPrice, 0)) FROM orders WHERE status IN ('cancelled', 'returning') AND cod_payout_status = 'payout_received' AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%') as cancelledNet
         `, [], (err3, row3) => {
           const deliveredNet = (row3 && row3.deliveredNet) || 0;
           const cancelledNet = (row3 && row3.cancelledNet) || 0;
@@ -2909,7 +2909,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          WHERE IFNULL(o.is_legacy, 0) = 0
            AND o.status NOT IN ('cancelled', 'returning')
            AND o.status != 'delivered'
-           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%test%' AND IFNULL(o.customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%essai%'
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
            AND (
              o.status = 'new' OR
              (o.status = 'confirmed' AND (
@@ -2930,7 +2930,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
          WHERE IFNULL(o.is_legacy, 0) = 0
            AND o.status NOT IN ('cancelled', 'returning')
            AND o.status != 'delivered'
-           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%test%' AND IFNULL(o.customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%essai%'
+           AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
            AND (
              o.status = 'new' OR
              (o.status = 'confirmed' AND (
@@ -3025,7 +3025,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
       JOIN order_items oi ON o.id = oi.orderId
       JOIN products p ON oi.productId = p.id
       WHERE o.ecotrack_tracking IS NOT NULL 
-        AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%test%' AND IFNULL(o.customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customer_name, '')) NOT LIKE '%essai%'
+        AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
       GROUP BY o.status, oi.productId
     `, [], (err, rows) => {
       stats.dhdInventory = { inTransit: [], returned: [] };
@@ -3106,7 +3106,7 @@ app.get('/api/analytics/worker-performance', authenticateToken, (req, res) => {
       SUM(CASE WHEN status IN ('cancelled', 'returning') OR dhd_status_label LIKE '%Retour%' THEN 1 ELSE 0 END) as returned,
       SUM(CASE WHEN status NOT IN ('delivered', 'cancelled', 'returning') AND (dhd_status_label IS NULL OR dhd_status_label NOT LIKE '%Retour%') THEN 1 ELSE 0 END) as inTransit
     FROM orders
-    WHERE worker_code IS NOT NULL AND worker_code != '' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%test%' AND IFNULL(customer_name, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customer_name, '')) NOT LIKE '%essai%' ${dateFilter} ${workerFilter}
+    WHERE worker_code IS NOT NULL AND worker_code != '' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ${dateFilter} ${workerFilter}
     GROUP BY worker_code
   `, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
