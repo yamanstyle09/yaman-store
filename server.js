@@ -1179,12 +1179,20 @@ app.patch('/api/orders/:id/status', authenticateToken, (req, res) => {
                           return res.json({ success: true });
                         });
                       } else {
-                        console.warn(`[Ecotrack] Delete rejected for ${order2.ecotrack_tracking} (already shipped/validated by DHD):`, result.message || data);
-                        return res.status(400).json({ error: "لا يمكن تعديل أو إلغاء الطلبية لأن الشحنة قيد التوصيل (expédié) بالفعل وتم تأكيد شحنها لدى شركة الشحن DHD." });
+                        console.warn(`[Ecotrack] Delete rejected for ${order2.ecotrack_tracking}:`, result.message || data);
+                        console.log(`[Ecotrack] Forcing local cancellation for ${orderId} despite DHD rejection.`);
+                        updateOrderStatus(orderId, newStatus, (updateErr, updateRes) => {
+                          if (updateErr) return res.status(500).json({ error: updateErr.message });
+                          return res.json({ success: true, warning: "تم إلغاء الطلبية وإرجاع المخزون محلياً، يرجى التواصل مع DHD لإلغائها من نظامهم" });
+                        });
                       }
                     } catch (parseErr) {
                       console.error(`[Ecotrack] Failed to parse delete response:`, data);
-                      return res.status(400).json({ error: "استجابة غير صالحة من شركة الشحن - قد تكون الشحنة قيد التوصيل بالفعل وغير قابلة للحذف." });
+                      console.log(`[Ecotrack] Forcing local cancellation for ${orderId} despite invalid DHD response.`);
+                      updateOrderStatus(orderId, newStatus, (updateErr, updateRes) => {
+                        if (updateErr) return res.status(500).json({ error: updateErr.message });
+                        return res.json({ success: true, warning: "تم الإلغاء محلياً، يرجى التأكد من DHD" });
+                      });
                     }
                   });
                 });
@@ -1453,6 +1461,9 @@ function syncOrderWithDhd(orderId) {
       if (!order) return reject(new Error("الطلبية غير موجودة."));
       if (!order.ecotrack_tracking) {
         return resolve({ updated: false, tracking: null, status: order.status, message: "الطلبية لا تمتلك رقم تتبع DHD." });
+      }
+      if (order.status === 'cancelled') {
+        return resolve({ updated: false, tracking: order.ecotrack_tracking, status: order.status, message: "الطلبية ملغاة محلياً، سيتم تجاهل حالة DHD." });
       }
       
       db.get("SELECT value FROM settings WHERE key = 'ecotrack_api_token'", [], (tokenErr, tokenRow) => {
