@@ -1682,19 +1682,6 @@ app.get('/api/inventory-purchases', authenticateToken, requireAdmin, (req, res) 
   });
 });
 
-app.get('/api/magic-distribute', (req, res) => {
-  const codes = ['D-10', 'D-102', 'D-116', 'D-124', 'D-125', 'D-130', 'D-131', 'D-132', 'D-133', 'D-135', 'D-136', 'D-137', 'D-138', 'D-139', 'D-140', 'D-141', 'D-142', 'D-143', 'D-144', 'D-17', 'D-29', 'D-44', 'D-52', 'D-62', 'D-84', 'D-85', 'D-86', 'D-91', 'D-92', 'D-93', 'D-96'];
-  const placeholders = codes.map(() => '?').join(',');
-  const query = `UPDATE products SET stock = stock + 10 WHERE code IN (${placeholders})`;
-  
-  db.run(query, codes, function(err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ success: true, message: `تم تحديث ${this.changes} منتج بنجاح بزيادة 10 قطع لكل منها.` });
-  });
-});
-
 app.post('/api/inventory-purchases', authenticateToken, requireAdmin, (req, res) => {
   const { category_code, quantity, price_per_unit, payment_type, amount_paid, amount_debt, supplier_name, distribution } = req.body;
   if (!category_code || !quantity || !price_per_unit || !payment_type) {
