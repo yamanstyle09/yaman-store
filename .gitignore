@@ -6,3 +6,4 @@ store_backup_*.db
 uploads/*
 !uploads/.gitkeep
 *.log
+store.db

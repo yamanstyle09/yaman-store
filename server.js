@@ -716,24 +716,26 @@ app.get('/api/categories', (req, res) => {
   });
 });
 
-app.post('/api/categories', authenticateToken, requireAdmin, (req, res) => {
-  const { code, name, price, purchasePrice, features, weight } = req.body;
+app.post('/api/categories', authenticateToken, requireAdmin, upload.single('image'), (req, res) => {
+  const { code, name, price, purchasePrice, features, weight, existingImage } = req.body;
   const unitWeight = (typeof weight !== 'undefined' && weight !== null && weight !== '') ? parseFloat(weight) : 1.45;
-  const featsStr = JSON.stringify(features || []);
+  const featsStr = typeof features === 'string' ? features : JSON.stringify(features || []);
+  
+  const image = req.file ? `/uploads/${req.file.filename}` : (existingImage || null);
 
   db.get("SELECT code FROM categories WHERE code = ?", [code], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (row) {
       // Update existing, do NOT touch stock
-      db.run("UPDATE categories SET name = ?, price = ?, purchasePrice = ?, features = ?, weight = ? WHERE code = ?",
-        [name, price, purchasePrice || 0, featsStr, unitWeight, code], function(err2) {
+      db.run("UPDATE categories SET name = ?, price = ?, purchasePrice = ?, features = ?, weight = ?, image = ? WHERE code = ?",
+        [name, price, purchasePrice || 0, featsStr, unitWeight, image, code], function(err2) {
           if (err2) return res.status(500).json({ error: err2.message });
           res.json({ success: true, code });
       });
     } else {
       // Insert new, stock will default to 0
-      db.run("INSERT INTO categories (code, name, price, purchasePrice, stock, features, weight) VALUES (?, ?, ?, ?, 0, ?, ?)",
-        [code, name, price, purchasePrice || 0, featsStr, unitWeight], function(err2) {
+      db.run("INSERT INTO categories (code, name, price, purchasePrice, stock, features, weight, image) VALUES (?, ?, ?, ?, 0, ?, ?, ?)",
+        [code, name, price, purchasePrice || 0, featsStr, unitWeight, image], function(err2) {
           if (err2) return res.status(500).json({ error: err2.message });
           res.json({ success: true, code });
       });
@@ -894,7 +896,8 @@ app.post('/api/orders', (req, res) => {
     deliveryType,
     appliedDeliveryPrice,
     realDeliveryPrice,
-    discount
+    discount,
+    workerCode
   } = req.body;
   
   // 1. Get commune from DB to check exact real & applied fees
@@ -1011,8 +1014,8 @@ app.post('/api/orders', (req, res) => {
             db.run(`INSERT INTO orders (
                       customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
                       communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, discount,
-                      month_year, monthly_sequence
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                      month_year, monthly_sequence, worker_code
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 customerName, 
                 phone, 
@@ -1028,7 +1031,8 @@ app.post('/api/orders', (req, res) => {
                 netProfit,
                 parseInt(discount) || 0,
                 currentMonthYear,
-                nextSeq
+                nextSeq,
+                workerCode || null
               ],
               function(err) {
                 if (err) {

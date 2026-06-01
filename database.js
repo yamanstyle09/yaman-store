@@ -29,15 +29,24 @@ const initDb = () => {
       purchasePrice INTEGER DEFAULT 0,
       stock INTEGER DEFAULT 50,
       features TEXT,
-      weight REAL DEFAULT 1.45
+      weight REAL DEFAULT 1.45,
+      image TEXT
     )`, () => {
       // Safe migration check to add purchasePrice if it doesn't exist
       db.run("ALTER TABLE categories ADD COLUMN purchasePrice INTEGER DEFAULT 0", [], (err) => {
-        // Safe to ignore if column already exists
+        if (!err) console.log("Added purchasePrice column to categories.");
       });
       // Safe migration check to add stock if it doesn't exist
       db.run("ALTER TABLE categories ADD COLUMN stock INTEGER DEFAULT 50", [], (err) => {
         // Safe to ignore if column already exists
+      });
+      // Migration for weight
+      db.run("ALTER TABLE categories ADD COLUMN weight REAL DEFAULT 1.45", [], (err) => {
+        if (!err) console.log("Added weight column to categories.");
+      });
+      // Migration for image
+      db.run("ALTER TABLE categories ADD COLUMN image TEXT", [], (err) => {
+        if (!err) console.log("Added image column to categories.");
       });
       // Safe migration: add weight column (kg per unit) with default 1.45 kg
       db.run("ALTER TABLE categories ADD COLUMN weight REAL DEFAULT 1.45", [], (err) => {
@@ -230,6 +239,7 @@ const initDb = () => {
       status TEXT DEFAULT 'new',
       month_year TEXT,
       monthly_sequence INTEGER DEFAULT 0,
+      worker_code TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, () => {
       // Safe migrations for orders table
@@ -252,6 +262,12 @@ const initDb = () => {
           });
           console.log("Migration: Added monthly_sequence to orders");
         }
+        
+        if (!colNames.includes('worker_code')) {
+          db.run("ALTER TABLE orders ADD COLUMN worker_code TEXT", () => {
+            console.log("Migration: Added worker_code to orders");
+          });
+        }
       });
       db.run("ALTER TABLE orders ADD COLUMN communeName TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN deliveryType TEXT", [], (e) => {});
@@ -263,6 +279,24 @@ const initDb = () => {
       db.run("ALTER TABLE orders ADD COLUMN dhd_status_label TEXT", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN cod_payout_status TEXT DEFAULT 'pending_payout'", [], (e) => {});
       db.run("ALTER TABLE orders ADD COLUMN is_legacy INTEGER DEFAULT 0", [], (e) => {});
+      
+      // Auto-Seed Variant D and products if not exist
+      db.run(`INSERT OR IGNORE INTO categories (code, name, price, purchasePrice, stock, features, weight, image) 
+              VALUES ('D', 'فئة D', 1900, 1500, 0, '[]', 1.45, NULL)`, [], (err) => {
+        if (!err) {
+          db.get("SELECT COUNT(*) as count FROM products WHERE category = 'D'", [], (err, row) => {
+            if (row && row.count === 0) {
+              const stmt = db.prepare(`INSERT OR IGNORE INTO products (code, category, name, image, stock) VALUES (?, 'D', ?, '', 0)`);
+              for (let i = 1; i <= 200; i++) {
+                const prodCode = `D-${i.toString().padStart(2, '0')}`;
+                stmt.run([prodCode, prodCode]);
+              }
+              stmt.finalize();
+              console.log("Migration: Seeded products D-01 to D-200");
+            }
+          });
+        }
+      });
       db.run("ALTER TABLE orders ADD COLUMN worker_code TEXT DEFAULT ''", [], (e) => {});
     });
 
