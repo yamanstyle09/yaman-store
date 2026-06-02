@@ -3193,6 +3193,35 @@ app.get('/api/analytics/worker-performance', authenticateToken, (req, res) => {
     GROUP BY worker_code
   `, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
+  });
+});
+
+app.get('/api/analytics/daily-pieces', authenticateToken, requireAdmin, (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: "التاريخ مطلوب." });
+
+  const query = `
+    SELECT 
+      p.code, 
+      p.name, 
+      p.category,
+      SUM(oi.quantity) as total_qty 
+    FROM orders o 
+    JOIN order_items oi ON o.id = oi.orderId 
+    JOIN products p ON oi.productId = p.id 
+    WHERE date(o.createdAt) = ? 
+      AND o.status NOT IN ('cancelled', 'returning') 
+      AND IFNULL(o.is_legacy, 0) = 0 
+      AND (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) 
+      AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' 
+      AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' 
+      AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%' 
+    GROUP BY p.code, p.name, p.category 
+    ORDER BY total_qty DESC;
+  `;
+
+  db.all(query, [date], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
