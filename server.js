@@ -800,38 +800,6 @@ app.get('/api/communes', authenticateToken, (req, res) => {
   });
 });
 
-// TEMPORARY: Fix products stock for existing orders
-app.post('/api/fix-products-stock', (req, res) => {
-  db.all(`
-    SELECT oi.productId, SUM(oi.quantity) as total_ordered
-    FROM order_items oi
-    JOIN orders o ON oi.orderId = o.id
-    WHERE o.status != 'cancelled'
-    GROUP BY oi.productId
-  `, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    
-    if (!rows || rows.length === 0) {
-      return res.json({ message: "No active orders found to deduct." });
-    }
-
-    db.serialize(() => {
-      db.run("BEGIN TRANSACTION");
-      const stmt = db.prepare("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?");
-      
-      rows.forEach(row => {
-        stmt.run([row.total_ordered, row.productId]);
-      });
-      
-      stmt.finalize();
-      db.run("COMMIT", (commitErr) => {
-        if (commitErr) return res.status(500).json({ error: commitErr.message });
-        res.json({ message: "Product stock has been corrected successfully.", affectedProducts: rows.length, data: rows });
-      });
-    });
-  });
-});
-
 app.get('/api/communes/wilaya/:wilayaId', (req, res) => {
   db.all("SELECT * FROM communes WHERE wilayaId = ? ORDER BY communeName ASC", [req.params.wilayaId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
