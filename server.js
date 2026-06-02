@@ -3494,6 +3494,91 @@ app.post('/api/temp-sql', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
+// AI Chatbot Integration
+const { GoogleGenAI } = require('@google/genai');
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const aiKey = process.env.GEMINI_API_KEY;
+    if (!aiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+    }
+    
+    const ai = new GoogleGenAI({ apiKey: aiKey });
+    
+    const { history } = req.body;
+    if (!history || !Array.isArray(history)) {
+      return res.status(400).json({ error: 'Invalid history format' });
+    }
+
+    // Fetch store context to build system instructions
+    const fetchContext = () => new Promise((resolve) => {
+      let categories = [];
+      let wilayas = [];
+      let settings = {};
+      
+      db.all("SELECT * FROM categories", [], (err, catRows) => {
+        if (!err && catRows) categories = catRows;
+        
+        db.all("SELECT * FROM wilayas", [], (err, wilRows) => {
+          if (!err && wilRows) wilayas = wilRows;
+          
+          db.all("SELECT * FROM settings", [], (err, setRows) => {
+            if (!err && setRows) {
+              setRows.forEach(row => settings[row.key] = row.value);
+            }
+            resolve({ categories, wilayas, settings });
+          });
+        });
+      });
+    });
+
+    const context = await fetchContext();
+    
+    // Build context string
+    let catalogStr = context.categories.map(c => `- ${c.name} (الموديل: ${c.code}): ${c.price} د.ج | الكمية المتوفرة: ${c.stock}`).join('\\n');
+    let deliveryStr = context.wilayas.map(w => `${w.id}-${w.name}: ${w.deliveryPrice} د.ج`).join(' | ');
+
+    const systemInstruction = `
+أنت المساعد الذكي الرسمي لمتجر ${context.settings.store_name || 'Yaman Style'}.
+مهمتك: الرد على استفسارات الزبائن، إعطاء أسعار المنتجات بدقة، أسعار التوصيل، وشرح كيفية الطلب.
+يجب أن تكون ودوداً، مختصراً، وتستخدم الإيموجي بذكاء.
+
+معلومات المنتجات الحالية في المتجر:
+${catalogStr}
+ملاحظة: إذا سأل العميل عن منتج غير موجود هنا، أخبره بلباقة أنه غير متوفر حالياً.
+
+أسعار التوصيل العادية للولايات:
+${deliveryStr}
+
+كيفية الطلب:
+أخبر العميل أن كل ما عليه فعله هو تصفح المتجر، اختيار المنتج، ثم سيظهر له نموذج (فورم) ليملأ فيه:
+الاسم، رقم الهاتف، الولاية، البلدية، والعنوان الكامل.
+الدفع يكون عند الاستلام.
+`;
+
+    // Initialize chat session
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: history,
+      config: {
+        systemInstruction,
+        temperature: 0.7,
+      }
+    });
+
+    if (response.text) {
+      res.json({ reply: response.text });
+    } else {
+      res.status(500).json({ error: 'Empty response from AI' });
+    }
+    
+  } catch (err) {
+    console.error('AI Chat Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Catch-all: serve index.html for React Router (must be LAST)
 const frontendIndexPath = path.join(__dirname, 'public', 'index.html');
 if (fs.existsSync(frontendIndexPath)) {
