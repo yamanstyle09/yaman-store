@@ -933,11 +933,13 @@ app.post('/api/orders', (req, res) => {
         });
       }
       
-      db.all("SELECT id, category FROM products", [], (prodErr, prodRows) => {
+      db.all("SELECT id, category, stock FROM products", [], (prodErr, prodRows) => {
         const productCategoryMap = {};
+        const productStockMap = {};
         if (!prodErr && prodRows) {
           prodRows.forEach(row => {
             productCategoryMap[row.id] = row.category;
+            productStockMap[row.id] = row.stock || 0;
           });
         }
         
@@ -945,14 +947,15 @@ app.post('/api/orders', (req, res) => {
         let totalWeightRaw = 0;
         let outOfStockError = null;
         
-        // Accumulate requested quantities by category code to check against available stock
+        // Accumulate requested quantities by category code and product id to check against available stock
         const requestedQuantities = {};
+        const requestedProductQuantities = {};
         
         items.forEach(item => {
           const catCode = productCategoryMap[item.productId];
-          // Only check stock if category exists, otherwise assume 0
           if (catCode) {
             requestedQuantities[catCode] = (requestedQuantities[catCode] || 0) + item.quantity;
+            requestedProductQuantities[item.productId] = (requestedProductQuantities[item.productId] || 0) + item.quantity;
           } else {
             requestedQuantities['UNKNOWN'] = (requestedQuantities['UNKNOWN'] || 0) + item.quantity;
           }
@@ -963,17 +966,29 @@ app.post('/api/orders', (req, res) => {
           totalWeightRaw += unitWeight * item.quantity;
         });
         
-        // Verify stock availability safely
-        for (const catCode of Object.keys(requestedQuantities)) {
-          const requested = requestedQuantities[catCode];
-          if (catCode === 'UNKNOWN') {
-            outOfStockError = `عذراً، بعض المنتجات المطلوبة غير موجودة في المستودع.`;
+        // Verify Product Stock safely
+        for (const prodId of Object.keys(requestedProductQuantities)) {
+          const requested = requestedProductQuantities[prodId];
+          const available = productStockMap[prodId] || 0;
+          if (requested > available) {
+            outOfStockError = `عذراً، الكمية المطلوبة (${requested}) للون/المقاس غير متوفرة في المخزن. المتوفر حالياً هو: ${available} قطعة.`;
             break;
           }
-          const available = stockMap[catCode] || 0;
-          if (requested > available) {
-            outOfStockError = `عذراً، الكمية المطلوبة (${requested}) للمنتج غير متوفرة في المخزن. المتوفر حالياً هو: ${available} قطعة.`;
-            break;
+        }
+
+        // Verify Category Stock safely
+        if (!outOfStockError) {
+          for (const catCode of Object.keys(requestedQuantities)) {
+            const requested = requestedQuantities[catCode];
+            if (catCode === 'UNKNOWN') {
+              outOfStockError = `عذراً، بعض المنتجات المطلوبة غير موجودة في المستودع.`;
+              break;
+            }
+            const available = stockMap[catCode] || 0;
+            if (requested > available) {
+              outOfStockError = `عذراً، المخزون الإجمالي للموديل غير كافٍ. المطلوب: ${requested}، المتوفر: ${available} قطعة.`;
+              break;
+            }
           }
         }
         
@@ -1043,13 +1058,16 @@ app.post('/api/orders', (req, res) => {
                 const orderId = this.lastID;
                 const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
                 const stmt2 = db.prepare("UPDATE categories SET stock = MAX(0, stock - ?) WHERE code = (SELECT category FROM products WHERE id = ?)");
+                const stmt3 = db.prepare("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?");
                 
                 items.forEach(item => {
                   stmt.run([orderId, item.productId, item.quantity, item.price]);
                   stmt2.run([item.quantity, item.productId]);
+                  stmt3.run([item.quantity, item.productId]);
                 });
                 stmt.finalize();
                 stmt2.finalize();
+                stmt3.finalize();
               
               db.run("COMMIT", (commitErr) => {
                 if (commitErr) return res.status(500).json({ error: commitErr.message });
@@ -1285,7 +1303,7 @@ function updateOrderStatus(orderId, newStatus, callback) {
       } else {
         // Stock adjustment is needed. Retrieve items first.
         db.all(`
-          SELECT p.category, oi.quantity 
+          SELECT p.category, oi.productId, oi.quantity 
           FROM order_items oi 
           JOIN products p ON oi.productId = p.id 
           WHERE oi.orderId = ?
@@ -1296,13 +1314,18 @@ function updateOrderStatus(orderId, newStatus, callback) {
             db.run("BEGIN TRANSACTION");
             let updateErr = null;
             const stmt = db.prepare("UPDATE categories SET stock = stock + ? WHERE code = ?");
+            const stmtProd = db.prepare("UPDATE products SET stock = stock + ? WHERE id = ?");
             items.forEach(item => {
               const stockChange = shouldBeDecremented ? -item.quantity : item.quantity;
               stmt.run([stockChange, item.category], (runErr) => {
                 if (runErr) updateErr = runErr;
               });
+              stmtProd.run([stockChange, item.productId], (runErr) => {
+                if (runErr) updateErr = runErr;
+              });
             });
             stmt.finalize();
+            stmtProd.finalize();
             
             if (updateErr) {
               db.run("ROLLBACK");
