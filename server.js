@@ -3199,9 +3199,38 @@ app.get('/api/analytics/worker-performance', authenticateToken, (req, res) => {
 
 app.patch('/api/products/:id/stock', authenticateToken, requireAdmin, (req, res) => {
   const { stock } = req.body;
-  db.run("UPDATE products SET stock = ? WHERE id = ?", [parseInt(stock) || 0, req.params.id], function(err) {
+  const newStock = parseInt(stock) || 0;
+  
+  if (newStock < 0) {
+    return res.status(400).json({ error: "لا يمكن أن يكون المخزون أقل من صفر." });
+  }
+
+  db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (err, product) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true });
+    if (!product) return res.status(404).json({ error: "المنتج غير موجود." });
+
+    db.get("SELECT stock FROM categories WHERE code = ?", [product.category], (err, category) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!category) return res.status(404).json({ error: "الفئة الأم غير موجودة." });
+
+      db.get("SELECT SUM(stock) as totalAssigned FROM products WHERE category = ? AND id != ?", [product.category, product.id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        const otherAssigned = row.totalAssigned || 0;
+        const maxAllowed = category.stock - otherAssigned;
+
+        if (newStock > maxAllowed) {
+          return res.status(400).json({ 
+            error: `خطأ: المخزون غير كافٍ. إجمالي المخزون المتاح للفئة (${category.code}) هو ${maxAllowed} قطعة فقط.` 
+          });
+        }
+
+        db.run("UPDATE products SET stock = ? WHERE id = ?", [newStock, req.params.id], function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ success: true });
+        });
+      });
+    });
   });
 });
 // Endpoint to clean up unused images in uploads directory
