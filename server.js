@@ -1083,6 +1083,178 @@ app.post('/api/orders', (req, res) => {
   });
 });
 
+// Edit Order
+app.put('/api/orders/:id', authenticateToken, (req, res) => {
+  const orderId = req.params.id;
+  const { 
+    customerName, phone, wilayaId, address, subtotal, deliveryPrice, total, 
+    items, communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, discount 
+  } = req.body;
+
+  // 1. Fetch current order to check status
+  db.get("SELECT status FROM orders WHERE id = ?", [orderId], (err, currentOrder) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!currentOrder) return res.status(404).json({ error: "الطلبية غير موجودة." });
+    
+    // Do not allow editing if delivered, cancelled, returning, etc.
+    if (['delivered', 'cancelled', 'returning', 'returned', 'shipped'].includes(currentOrder.status)) {
+      return res.status(400).json({ error: "لا يمكن تعديل طلبية تم تسليمها لشركة التوصيل أو إلغاؤها." });
+    }
+
+    // 2. Fetch commune for fees
+    db.get("SELECT * FROM communes WHERE wilayaId = ? AND communeName = ?", [wilayaId, communeName], (err, commune) => {
+      let finalAppliedDelivery = deliveryPrice;
+      let finalRealDelivery = 0;
+      if (commune) {
+        if (deliveryType === 'desk') {
+          finalAppliedDelivery = deliveryPrice === 0 ? 0 : commune.appliedDeskFee;
+          finalRealDelivery = commune.realDeskFee;
+        } else {
+          finalAppliedDelivery = deliveryPrice === 0 ? 0 : commune.appliedHomeFee;
+          finalRealDelivery = commune.realHomeFee;
+        }
+      } else {
+        finalAppliedDelivery = typeof appliedDeliveryPrice !== 'undefined' ? appliedDeliveryPrice : (deliveryPrice || 0);
+        finalRealDelivery = typeof realDeliveryPrice !== 'undefined' ? realDeliveryPrice : 0;
+      }
+      
+      const finalTotal = subtotal + finalAppliedDelivery - (parseInt(discount) || 0);
+
+      // 3. Fetch purchase prices, weights, stocks
+      db.all("SELECT code, purchasePrice, weight, stock FROM categories", [], (catErr, catRows) => {
+        const purchasePriceMap = {};
+        const weightMap = {};
+        const catStockMap = {};
+        if (catRows) {
+          catRows.forEach(row => {
+            purchasePriceMap[row.code] = row.purchasePrice || 0;
+            weightMap[row.code] = row.weight || 1.45;
+            catStockMap[row.code] = row.stock || 0;
+          });
+        }
+        
+        db.all("SELECT id, category, stock FROM products", [], (prodErr, prodRows) => {
+          const productCategoryMap = {};
+          const productStockMap = {};
+          if (prodRows) {
+            prodRows.forEach(row => {
+              productCategoryMap[row.id] = row.category;
+              productStockMap[row.id] = row.stock || 0;
+            });
+          }
+
+          // Fetch old items
+          db.all("SELECT productId, quantity FROM order_items WHERE orderId = ?", [orderId], (itemErr, oldItems) => {
+            if (itemErr) return res.status(500).json({ error: itemErr.message });
+            
+            const prodDelta = {};
+            const catDelta = {};
+            
+            oldItems.forEach(item => {
+              prodDelta[item.productId] = (prodDelta[item.productId] || 0) - item.quantity;
+              const cat = productCategoryMap[item.productId];
+              if (cat) catDelta[cat] = (catDelta[cat] || 0) - item.quantity;
+            });
+            
+            let totalPurchaseCost = 0;
+            let totalWeightRaw = 0;
+            
+            items.forEach(item => {
+              prodDelta[item.productId] = (prodDelta[item.productId] || 0) + item.quantity;
+              const cat = productCategoryMap[item.productId];
+              if (cat) {
+                catDelta[cat] = (catDelta[cat] || 0) + item.quantity;
+                totalPurchaseCost += (purchasePriceMap[cat] || 0) * item.quantity;
+                totalWeightRaw += (weightMap[cat] || 1.45) * item.quantity;
+              }
+            });
+
+            // Validate Stock
+            let outOfStockError = null;
+            for (const [prodId, delta] of Object.entries(prodDelta)) {
+              if (delta > 0) {
+                const available = productStockMap[prodId] || 0;
+                if (delta > available) {
+                  outOfStockError = `عذراً، المخزون غير كافٍ لأحد المنتجات بعد التعديل.`;
+                  break;
+                }
+              }
+            }
+            if (!outOfStockError) {
+              for (const [catCode, delta] of Object.entries(catDelta)) {
+                if (delta > 0) {
+                  const available = catStockMap[catCode] || 0;
+                  if (delta > available) {
+                    outOfStockError = `عذراً، مخزون الفئة (${catCode}) غير كافٍ لتغطية الزيادة.`;
+                    break;
+                  }
+                }
+              }
+            }
+            if (outOfStockError) return res.status(400).json({ error: outOfStockError });
+
+            // Calculate new netProfit and weight
+            const finalWeight = totalWeightRaw > 5.9 ? Math.ceil(totalWeightRaw) : Math.round(totalWeightRaw * 100) / 100;
+            let overweightFee = 0;
+            if (finalWeight > 5) overweightFee = Math.ceil(finalWeight - 5) * 50;
+            const adjustedRealDelivery = finalRealDelivery + overweightFee;
+            const netProfit = subtotal + finalAppliedDelivery - (parseInt(discount) || 0) - totalPurchaseCost - adjustedRealDelivery;
+
+            // Execute Transaction
+            db.serialize(() => {
+              db.run("BEGIN TRANSACTION");
+              
+              const updateProd = db.prepare("UPDATE products SET stock = stock - ? WHERE id = ?");
+              const updateCat = db.prepare("UPDATE categories SET stock = stock - ? WHERE code = ?");
+              for (const [prodId, delta] of Object.entries(prodDelta)) {
+                if (delta !== 0) updateProd.run([delta, prodId]);
+              }
+              for (const [catCode, delta] of Object.entries(catDelta)) {
+                if (delta !== 0) updateCat.run([delta, catCode]);
+              }
+              updateProd.finalize();
+              updateCat.finalize();
+
+              db.run("DELETE FROM order_items WHERE orderId = ?", [orderId], (delErr) => {
+                if (delErr) {
+                  db.run("ROLLBACK");
+                  return res.status(500).json({ error: delErr.message });
+                }
+
+                const stmt = db.prepare("INSERT INTO order_items (orderId, productId, quantity, priceAtPurchase) VALUES (?, ?, ?, ?)");
+                items.forEach(item => stmt.run([orderId, item.productId, item.quantity, item.price]));
+                stmt.finalize();
+
+                db.run(`UPDATE orders SET 
+                  customerName = ?, phone = ?, wilayaId = ?, address = ?, subtotal = ?, deliveryPrice = ?, total = ?,
+                  communeName = ?, deliveryType = ?, appliedDeliveryPrice = ?, realDeliveryPrice = ?, netProfit = ?, discount = ?
+                  WHERE id = ?`,
+                  [
+                    customerName, phone, wilayaId, address, subtotal, finalAppliedDelivery, finalTotal,
+                    communeName || '', deliveryType || 'home', finalAppliedDelivery, adjustedRealDelivery, netProfit, parseInt(discount) || 0,
+                    orderId
+                  ], 
+                  (updateErr) => {
+                    if (updateErr) {
+                      db.run("ROLLBACK");
+                      return res.status(500).json({ error: updateErr.message });
+                    }
+                    db.run("COMMIT", (commitErr) => {
+                      if (commitErr) return res.status(500).json({ error: commitErr.message });
+                      res.json({ success: true, orderId });
+                    });
+                  }
+                );
+              });
+            });
+
+          });
+        });
+      });
+    });
+  });
+});
+
 
 // Change Order Status
 app.patch('/api/orders/:id/status', authenticateToken, (req, res) => {
