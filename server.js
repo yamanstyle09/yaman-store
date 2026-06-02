@@ -801,7 +801,7 @@ app.get('/api/communes', authenticateToken, (req, res) => {
 });
 
 // TEMPORARY: Fix products stock for existing orders
-app.post('/api/fix-products-stock', authenticateToken, (req, res) => {
+app.post('/api/fix-products-stock', (req, res) => {
   db.all(`
     SELECT oi.productId, SUM(oi.quantity) as total_ordered
     FROM order_items oi
