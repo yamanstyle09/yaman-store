@@ -479,7 +479,7 @@ function triggerEcotrackCreate(orderId) {
             code_wilaya: String(order.wilayaId),
             montant: String(order.total),
             produit: productNames.substring(0, 255),
-            type: '1',
+            type: order.is_exchange ? '2' : '1',
             stop_desk: String(isStopDesk),
             weight: String(finalWeight),
             remarque: `طلبية رقم #${order.id} - Yaman Style | الوزن: ${finalWeight} كغ`
@@ -897,7 +897,8 @@ app.post('/api/orders', (req, res) => {
     appliedDeliveryPrice,
     realDeliveryPrice,
     discount,
-    workerCode
+    workerCode,
+    is_exchange
   } = req.body;
   
   // 1. Get commune from DB to check exact real & applied fees
@@ -1029,8 +1030,8 @@ app.post('/api/orders', (req, res) => {
             db.run(`INSERT INTO orders (
                       customerName, phone, wilayaId, address, subtotal, deliveryPrice, total,
                       communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, netProfit, discount,
-                      month_year, monthly_sequence, worker_code
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                      month_year, monthly_sequence, worker_code, is_exchange
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 customerName, 
                 phone, 
@@ -1047,7 +1048,8 @@ app.post('/api/orders', (req, res) => {
                 parseInt(discount) || 0,
                 currentMonthYear,
                 nextSeq,
-                workerCode || null
+                workerCode || null,
+                is_exchange ? 1 : 0
               ],
               function(err) {
                 if (err) {
@@ -1088,7 +1090,7 @@ app.put('/api/orders/:id', authenticateToken, (req, res) => {
   const orderId = req.params.id;
   const { 
     customerName, phone, wilayaId, address, subtotal, deliveryPrice, total, 
-    items, communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, discount 
+    items, communeName, deliveryType, appliedDeliveryPrice, realDeliveryPrice, discount, is_exchange 
   } = req.body;
 
   // 1. Fetch current order to check status
@@ -1227,11 +1229,13 @@ app.put('/api/orders/:id', authenticateToken, (req, res) => {
 
                 db.run(`UPDATE orders SET 
                   customerName = ?, phone = ?, wilayaId = ?, address = ?, subtotal = ?, deliveryPrice = ?, total = ?,
-                  communeName = ?, deliveryType = ?, appliedDeliveryPrice = ?, realDeliveryPrice = ?, netProfit = ?, discount = ?
+                  communeName = ?, deliveryType = ?, appliedDeliveryPrice = ?, realDeliveryPrice = ?, netProfit = ?, discount = ?,
+                  is_exchange = ?
                   WHERE id = ?`,
                   [
                     customerName, phone, wilayaId, address, subtotal, finalAppliedDelivery, finalTotal,
                     communeName || '', deliveryType || 'home', finalAppliedDelivery, adjustedRealDelivery, netProfit, parseInt(discount) || 0,
+                    is_exchange ? 1 : 0,
                     orderId
                   ], 
                   (updateErr) => {
