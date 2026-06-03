@@ -432,6 +432,15 @@ const initDb = () => {
         }
       });
     });
+
+    // Meta Ads Settings Table
+    db.run(`CREATE TABLE IF NOT EXISTS meta_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      ad_account_id TEXT,
+      access_token TEXT,
+      exchange_rate INTEGER DEFAULT 220,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
   });
 };
 

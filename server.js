@@ -1483,6 +1483,29 @@ app.post('/api/settings', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
+app.get('/api/settings/meta', authenticateToken, requireAdmin, (req, res) => {
+  db.get("SELECT * FROM meta_settings WHERE id = 1", [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(row || { ad_account_id: '', access_token: '', exchange_rate: 220 });
+  });
+});
+
+app.post('/api/settings/meta', authenticateToken, requireAdmin, (req, res) => {
+  const { ad_account_id, access_token, exchange_rate } = req.body;
+  db.run(`
+    INSERT INTO meta_settings (id, ad_account_id, access_token, exchange_rate, updatedAt)
+    VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET 
+      ad_account_id = excluded.ad_account_id, 
+      access_token = excluded.access_token, 
+      exchange_rate = excluded.exchange_rate, 
+      updatedAt = CURRENT_TIMESTAMP
+  `, [ad_account_id, access_token, exchange_rate || 220], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
 function updateOrderStatus(orderId, newStatus, callback) {
   db.get("SELECT status, ecotrack_tracking FROM orders WHERE id = ?", [orderId], (err, order) => {
     if (err) return callback(err);
@@ -3287,6 +3310,7 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
           const spend = spendMap[d] || 0;
           const CAC = orderInfo.orderCount > 0 ? parseFloat((spend / orderInfo.orderCount).toFixed(1)) : 0;
           const adCostPerPiece = orderInfo.totalPieces > 0 ? parseFloat((spend / orderInfo.totalPieces).toFixed(1)) : 0;
+          const avgPieces = orderInfo.orderCount > 0 ? parseFloat((orderInfo.totalPieces / orderInfo.orderCount).toFixed(2)) : 0;
 
           return {
             date: d,
@@ -3296,13 +3320,41 @@ app.get('/api/analytics/erp-summary', authenticateToken, requireAdmin, (req, res
             returnedCount: orderInfo.returnedCount,
             totalPieces: orderInfo.totalPieces,
             cac: CAC,
-            adCostPerPiece: adCostPerPiece
+            adCostPerPiece: adCostPerPiece,
+            avgPieces: avgPieces
           };
         });
 
         stats.dailyPerformance = dailyList;
         resolve();
       });
+    });
+  });
+
+  const getGlobalAdsMetrics = () => new Promise((resolve) => {
+    db.get(`
+      SELECT 
+        COUNT(DISTINCT o.id) as totalOrders,
+        SUM(oi.quantity) as totalPieces
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.orderId
+      WHERE (o.dhd_status_label NOT LIKE '%🧪%' OR o.dhd_status_label IS NULL) 
+        AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%test%' 
+        AND IFNULL(o.customerName, '') NOT LIKE '%تجربة%' 
+        AND LOWER(IFNULL(o.customerName, '')) NOT LIKE '%essai%'
+        ${dOrders.replace('createdAt', 'o.createdAt')}
+    `, [], (err, row) => {
+      const orders = (row && row.totalOrders) || 0;
+      const pieces = (row && row.totalPieces) || 0;
+      const adSpend = stats.totals.adSpend || 0;
+      
+      stats.totals.globalOrdersCount = orders;
+      stats.totals.globalPiecesCount = pieces;
+      stats.totals.globalCac = orders > 0 ? parseFloat((adSpend / orders).toFixed(1)) : 0;
+      stats.totals.globalCpp = pieces > 0 ? parseFloat((adSpend / pieces).toFixed(1)) : 0;
+      stats.totals.globalAvgPieces = orders > 0 ? parseFloat((pieces / orders).toFixed(2)) : 0;
+      
+      resolve();
     });
   });
 
@@ -3613,6 +3665,52 @@ ${deliveryStr}
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- META ADS AUTO-SYNC ---
+async function syncMetaAdsSpend() {
+  try {
+    db.get("SELECT * FROM meta_settings WHERE id = 1", async (err, settings) => {
+      if (err || !settings || !settings.access_token || !settings.ad_account_id) {
+        return; // No settings configured
+      }
+
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const url = `https://graph.facebook.com/v19.0/act_${settings.ad_account_id}/insights?time_range={'since':'${today}','until':'${today}'}&fields=spend&access_token=${settings.access_token}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.data && data.data.length > 0) {
+        let spend = parseFloat(data.data[0].spend) || 0;
+        
+        // Convert to DZD using exchange rate
+        let finalSpend = Math.round(spend * (settings.exchange_rate || 220));
+        
+        db.run(`
+          INSERT INTO ad_spend (spend_date, amount) 
+          VALUES (?, ?) 
+          ON CONFLICT(spend_date) DO UPDATE SET amount = excluded.amount
+        `, [today, finalSpend], (dbErr) => {
+          if (dbErr) {
+            console.error('[Meta Ads Sync] Database Error:', dbErr);
+          } else {
+            console.log(`[Meta Ads Sync] Successfully synced spend for ${today}: ${finalSpend} DZD (Original: ${spend})`);
+          }
+        });
+      } else if (data.error) {
+        console.error('[Meta Ads Sync] API Error:', data.error.message);
+      }
+    });
+  } catch (error) {
+    console.error('[Meta Ads Sync] Fetch Error:', error.message);
+  }
+}
+
+// Run the sync every 2 hours
+setInterval(syncMetaAdsSpend, 2 * 60 * 60 * 1000);
+// Also run it 5 seconds after server start
+setTimeout(syncMetaAdsSpend, 5000);
+// --------------------------
 
 // Catch-all: serve index.html for React Router (must be LAST)
 const adminIndexPath = path.join(__dirname, 'public', 'admin', 'index.html');
