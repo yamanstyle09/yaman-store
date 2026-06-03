@@ -35,9 +35,9 @@ function verifyPassword(password, storedValue) {
 }
 
 // Signed Secure Token Generator (No external dependencies)
-function generateToken(email, role) {
+function generateToken(email, role, workerCode = '') {
   const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 Hours lifetime
-  const payload = `${email}|${role}|${expires}`;
+  const payload = `${email}|${role}|${expires}|${workerCode}`;
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
   return `${payload}|${signature}`;
 }
@@ -53,25 +53,32 @@ function authenticateToken(req, res, next) {
   
   try {
     const parts = token.split('|');
-    if (parts.length !== 4) {
+    if (parts.length < 4) {
       return res.status(401).json({ error: 'رمز الجلسة غير صالح.' });
     }
     
-    const [email, role, expiresStr, signature] = parts;
+    // Support older tokens without workerCode
+    let email, role, expiresStr, workerCode, signature;
+    if (parts.length === 5) {
+      [email, role, expiresStr, workerCode, signature] = parts;
+    } else {
+      [email, role, expiresStr, signature] = parts;
+      workerCode = '';
+    }
     const expires = parseInt(expiresStr);
     
     if (Date.now() > expires) {
       return res.status(401).json({ error: 'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مجدداً.' });
     }
     
-    const payload = `${email}|${role}|${expiresStr}`;
+    const payload = parts.length === 5 ? `${email}|${role}|${expiresStr}|${workerCode}` : `${email}|${role}|${expiresStr}`;
     const verifySignature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
     
     if (signature !== verifySignature) {
       return res.status(401).json({ error: 'رمز الجلسة غير صحيح أو تالف.' });
     }
     
-    req.user = { email, role };
+    req.user = { email, role, workerCode };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'فشل المصادقة الأمنية.' });
@@ -702,7 +709,7 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
     }
 
-    const token = generateToken(user.email, user.role);
+    const token = generateToken(user.email, user.role, user.worker_code);
     res.json({
       success: true,
       token,
@@ -871,7 +878,18 @@ app.get('/api/orders', authenticateToken, (req, res) => {
       }
     });
   });
-  db.all("SELECT * FROM orders WHERE is_legacy = 0 ORDER BY createdAt DESC", [], (err, rows) => {
+
+  let query = "SELECT * FROM orders WHERE is_legacy = 0";
+  let params = [];
+
+  if (req.user && req.user.role === 'employee') {
+    query += " AND worker_code = ?";
+    params.push(req.user.workerCode || '');
+  }
+
+  query += " ORDER BY createdAt DESC";
+
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -2328,7 +2346,17 @@ app.delete('/api/borrowings/:id', authenticateToken, requireAdmin, (req, res) =>
 
 // 7.6 CASH RECONCILIATION & COD PAYOUTS API
 app.get('/api/orders/delivered', authenticateToken, (req, res) => {
-  db.all("SELECT * FROM orders WHERE status = 'delivered' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%' ORDER BY createdAt DESC", [], (err, rows) => {
+  let query = "SELECT * FROM orders WHERE status = 'delivered' AND is_legacy = 0 AND (dhd_status_label NOT LIKE '%🧪%' OR dhd_status_label IS NULL) AND LOWER(IFNULL(customerName, '')) NOT LIKE '%test%' AND IFNULL(customerName, '') NOT LIKE '%تجربة%' AND LOWER(IFNULL(customerName, '')) NOT LIKE '%essai%'";
+  let params = [];
+
+  if (req.user && req.user.role === 'employee') {
+    query += " AND worker_code = ?";
+    params.push(req.user.workerCode || '');
+  }
+
+  query += " ORDER BY createdAt DESC";
+
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
