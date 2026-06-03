@@ -107,11 +107,18 @@ const dataDir = isProd ? path.join(__dirname, 'data') : __dirname;
 const uploadsDir = path.join(dataDir, 'uploads');
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve React frontend in production
-const frontendBuildPath = path.join(__dirname, 'public');
-if (fs.existsSync(frontendBuildPath)) {
-  app.use(express.static(frontendBuildPath));
-  console.log('Serving static frontend from /public');
+// Serve React frontends in production
+const adminBuildPath = path.join(__dirname, 'public', 'admin');
+const storefrontBuildPath = path.join(__dirname, 'public', 'storefront');
+
+if (fs.existsSync(adminBuildPath)) {
+  app.use('/admin', express.static(adminBuildPath));
+  console.log('Serving static admin panel from /public/admin');
+}
+
+if (fs.existsSync(storefrontBuildPath)) {
+  app.use(express.static(storefrontBuildPath));
+  console.log('Serving static storefront from /public/storefront');
 }
 
 // Ensure uploads dir exists
@@ -3580,10 +3587,18 @@ ${deliveryStr}
 });
 
 // Catch-all: serve index.html for React Router (must be LAST)
-const frontendIndexPath = path.join(__dirname, 'public', 'index.html');
-if (fs.existsSync(frontendIndexPath)) {
-  app.get(/^(?!\/api).*/, (req, res) => {
-    res.sendFile(frontendIndexPath);
+const adminIndexPath = path.join(__dirname, 'public', 'admin', 'index.html');
+const storefrontIndexPath = path.join(__dirname, 'public', 'storefront', 'index.html');
+
+if (fs.existsSync(adminIndexPath)) {
+  app.get(/^\/admin(?!\/api).*/, (req, res) => {
+    res.sendFile(adminIndexPath);
+  });
+}
+
+if (fs.existsSync(storefrontIndexPath)) {
+  app.get(/^(?!\/(api|admin)).*/, (req, res) => {
+    res.sendFile(storefrontIndexPath);
   });
 }
 
